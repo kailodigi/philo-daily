@@ -3,28 +3,73 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Philo Daily Brief：中文行业热点日报与投资决策线索。">
   <title>Philo Daily Brief</title>
-  <style>
-    :root { color-scheme: light; --paper: #f5efe4; --ink: #171412; --brick: #a44735; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: var(--paper); color: var(--ink); font-family: ui-serif, Georgia, "Noto Serif SC", serif; }
-    main { width: min(100% - 40px, 720px); margin: 0 auto; padding: 72px 0; }
-    .eyebrow { margin: 0 0 16px; color: var(--brick); font: 700 0.78rem/1.4 ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.16em; text-transform: uppercase; }
-    h1 { margin: 0; max-width: 12ch; color: #0d0c0b; font-size: clamp(2.6rem, 12vw, 5.25rem); line-height: 0.96; letter-spacing: -0.055em; }
-    .subtitle { margin: 24px 0 48px; font: 500 clamp(1.15rem, 5vw, 1.5rem)/1.5 ui-sans-serif, system-ui, sans-serif; }
-    .rule { width: 80px; height: 5px; margin-bottom: 48px; background: var(--brick); }
-    a { display: inline-flex; align-items: center; gap: 10px; color: var(--brick); font: 700 1rem/1.4 ui-sans-serif, system-ui, sans-serif; text-decoration: none; border-bottom: 2px solid currentColor; padding-bottom: 4px; }
-    a:hover, a:focus-visible { color: #743022; }
-    @media (min-width: 640px) { main { padding-top: 112px; } }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main>
-    <p class="eyebrow">Industry intelligence · Daily</p>
-    <h1>Philo Daily Brief</h1>
-    <p class="subtitle">中文行业热点日报</p>
-    <div class="rule" aria-hidden="true"></div>
-    <a href="archive.html">历史日报 <span aria-hidden="true">→</span></a>
+  <header class="site-header shell">
+    <nav class="nav" aria-label="主导航">
+      <a class="brand" href="index.html">Philo Daily</a>
+      <div class="nav-links">
+        <a href="2026-08-03.html">今日日报</a>
+        <a href="archive.html">归档</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="shell">
+    <section aria-labelledby="page-title">
+      <p class="eyebrow">V3 · Industry intelligence</p>
+      <h1 id="page-title">Philo Daily Brief</h1>
+      <p class="deck">中文行业热点日报。过滤噪音，保留影响资产定价与长期判断的信号。</p>
+      <div class="meta-row">
+        <span>2026-08-03 · 星期一</span>
+        <span>北京时间</span>
+      </div>
+      <div class="hero-rule" aria-hidden="true"></div>
+    </section>
+
+    <section class="section" aria-labelledby="core-title">
+      <span class="section-label">Today in three</span>
+      <h2 id="core-title">今日核心结论</h2>
+      <ol class="conclusion-list">
+        <li>
+          <strong>油价回落带来风险偏好喘息，但宏观交易仍由事件驱动。</strong>
+          <span>美伊谈判预期压低原油与长端利率，日元联合干预则提醒市场：政策变量正在重新定价。</span>
+        </li>
+        <li>
+          <strong>AI 叙事从“算力稀缺”进入“资本回报与融资结构”验证期。</strong>
+          <span>超大规模数据中心讨论继续扩张，但投资者开始追问现金流、信用支持和客户集中度。</span>
+        </li>
+        <li>
+          <strong>半导体竞争焦点正从单一制程延伸到先进封装、良率与成本。</strong>
+          <span>CoWoS 紧张、EMIB 替代与 2nm 追赶同时发生，供应链第二梯队的议价机会增加。</span>
+        </li>
+      </ol>
+      <div class="button-row">
+        <a class="button" href="2026-08-03.html">阅读今日完整日报 <span aria-hidden="true">→</span></a>
+        <a class="button button--ghost" href="archive.html">历史归档</a>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="recent-title">
+      <span class="section-label">Recent editions</span>
+      <h2 id="recent-title">最近日报</h2>
+      <ul class="recent-list">
+        <li>
+          <a href="2026-08-03.html">
+            <time datetime="2026-08-03">08 / 03</time>
+            <strong>2026-08-03 行业热点日报</strong>
+            <span class="arrow" aria-hidden="true">→</span>
+          </a>
+        </li>
+      </ul>
+    </section>
   </main>
+
+  <footer class="site-footer shell">
+    <p>Philo Daily Brief · 事实、外部观点与结构化判断分层呈现。</p>
+  </footer>
 </body>
 </html>

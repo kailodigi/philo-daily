@@ -3,29 +3,49 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>历史日报 · Philo Daily Brief</title>
-  <style>
-    :root { color-scheme: light; --paper: #f5efe4; --ink: #171412; --brick: #a44735; --line: #d9cfc0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: var(--paper); color: var(--ink); font-family: ui-sans-serif, system-ui, "Noto Sans SC", sans-serif; }
-    main { width: min(100% - 40px, 720px); margin: 0 auto; padding: 64px 0; }
-    .back { color: var(--brick); font-weight: 700; text-decoration: none; }
-    h1 { margin: 48px 0 12px; font-family: ui-serif, Georgia, "Noto Serif SC", serif; font-size: clamp(2.4rem, 10vw, 4.5rem); letter-spacing: -0.045em; }
-    .intro { margin: 0 0 44px; color: #5e554d; }
-    .archive { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
-    .archive li { padding: 24px 0; border-bottom: 1px solid var(--line); }
-    .archive a { color: var(--ink); font-size: 1.1rem; font-weight: 700; text-decoration-color: var(--brick); text-decoration-thickness: 2px; text-underline-offset: 5px; }
-    @media (min-width: 640px) { main { padding-top: 96px; } }
-  </style>
+  <meta name="description" content="Philo Daily Brief 历史日报归档。">
+  <title>历史归档 · Philo Daily Brief</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main>
-    <a class="back" href="index.html">← 返回首页</a>
-    <h1>历史日报</h1>
-    <p class="intro">按日期浏览已发布的中文行业热点日报。</p>
-    <ul class="archive">
-      <li><a href="#">2026-08-03 行业热点日报</a></li>
-    </ul>
+  <header class="site-header shell">
+    <nav class="nav" aria-label="主导航">
+      <a class="brand" href="index.html">Philo Daily</a>
+      <div class="nav-links">
+        <a href="2026-08-03.html">今日日报</a>
+        <a href="archive.html" aria-current="page">归档</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="shell">
+    <section aria-labelledby="archive-title">
+      <p class="eyebrow">Archive</p>
+      <h1 id="archive-title">历史归档</h1>
+      <p class="deck">按日期浏览已发布的中文行业热点日报。</p>
+      <div class="hero-rule" aria-hidden="true"></div>
+    </section>
+
+    <section aria-labelledby="year-2026">
+      <h2 class="archive-year" id="year-2026">2026</h2>
+      <ul class="recent-list">
+        <li>
+          <a href="2026-08-03.html">
+            <time datetime="2026-08-03">08 / 03</time>
+            <strong>2026-08-03 行业热点日报</strong>
+            <span class="arrow" aria-hidden="true">→</span>
+          </a>
+        </li>
+      </ul>
+    </section>
+
+    <div class="button-row">
+      <a class="button button--ghost" href="index.html">← 返回首页</a>
+    </div>
   </main>
+
+  <footer class="site-footer shell">
+    <p>Philo Daily Brief · Archive</p>
+  </footer>
 </body>
 </html>
