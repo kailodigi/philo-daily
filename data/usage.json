@@ -8,5 +8,22 @@
     "cny_per_usd_estimate": 7.0,
     "monthly_budget_usd": 5.0
   },
-  "days": []
+  "days": [
+    {
+      "date": "2026-08-04",
+      "model": "qwen-plus",
+      "generation_count": 1,
+      "api_attempts": 5,
+      "successful_calls": 5,
+      "search_calls": 3,
+      "input_tokens": 26809,
+      "output_tokens": 10988,
+      "total_tokens": 37797,
+      "estimated_model_cost_cny": 0.043423,
+      "estimated_search_cost_cny": 0.15,
+      "estimated_total_cost_cny": 0.193423,
+      "estimated_total_cost_usd": 0.027632
+    }
+  ],
+  "updated_at": "2026-08-04T17:13:42+08:00"
 }

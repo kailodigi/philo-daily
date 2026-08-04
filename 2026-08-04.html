@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="2026-08-04 Philo Daily Brief：全球金融、AI、半导体与社媒趋势。">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f4efe6">
+  <title>2026-08-04 行业热点日报 · Philo Daily Brief</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f4efe6;
+      --paper-deep: #e9dfd1;
+      --card: #fffdf8;
+      --ink: #121110;
+      --muted: #675f57;
+      --line: #d7ccbd;
+      --brick: #9f4937;
+      --brick-deep: #713328;
+      --navy: #526778;
+      --navy-soft: #dfe5e8;
+      --gold: #9b8046;
+      --gold-soft: #ebe2ca;
+      --shadow: 0 18px 44px rgba(52, 40, 30, .08);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; overflow-wrap: anywhere; }
+    body {
+      margin: 0;
+      min-width: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+      font-size: 16px;
+      line-height: 1.72;
+      text-rendering: optimizeLegibility;
+      -webkit-text-size-adjust: 100%;
+    }
+    a { color: inherit; }
+    a:focus-visible { outline: 3px solid rgba(159, 73, 55, .35); outline-offset: 4px; }
+    .shell { width: min(calc(100% - 32px), 720px); margin-inline: auto; }
+    .site-header { padding-top: max(20px, env(safe-area-inset-top)); }
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding-bottom: 17px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand {
+      flex: 0 0 auto;
+      font-size: .74rem;
+      font-weight: 850;
+      letter-spacing: .13em;
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+    .nav-links { display: flex; gap: 15px; font-size: .82rem; font-weight: 750; }
+    .nav-links a { color: var(--muted); text-decoration: none; }
+    .nav-links a:hover { color: var(--brick); }
+    main { padding: 0 0 84px; }
+    .cover {
+      min-height: min(720px, calc(100svh - 58px));
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 56px 0 48px;
+    }
+    .eyebrow,
+    .section-label {
+      margin: 0 0 15px;
+      color: var(--section-accent, var(--brick));
+      font-size: .72rem;
+      font-weight: 850;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3 { margin-top: 0; font-family: Iowan Old Style, Baskerville, Georgia, "Noto Serif SC", serif; }
+    h1 {
+      max-width: 640px;
+      margin-bottom: 20px;
+      font-size: clamp(2.8rem, 13.4vw, 5.8rem);
+      line-height: .96;
+      letter-spacing: -.06em;
+    }
+    h2 { margin-bottom: 21px; font-size: clamp(1.8rem, 7.4vw, 2.65rem); line-height: 1.08; letter-spacing: -.04em; }
+    h3 { margin-bottom: 9px; font-size: 1.13rem; line-height: 1.25; letter-spacing: -.015em; }
+    p { margin-top: 0; }
+    .deck { max-width: 38rem; margin-bottom: 24px; color: #3f3a35; font-size: clamp(1.05rem, 4.5vw, 1.32rem); }
+    .cover-meta { display: flex; flex-wrap: wrap; gap: 7px 17px; color: var(--muted); font-size: .82rem; font-weight: 700; }
+    .cover-rule { width: 86px; height: 5px; margin-top: 32px; background: var(--brick); }
+    .section {
+      --section-accent: var(--brick);
+      padding-top: 30px;
+      margin-top: 62px;
+      border-top: 1px solid var(--line);
+      scroll-margin-top: 16px;
+    }
+    .section--ai { --section-accent: var(--navy); }
+    .section--social { --section-accent: var(--gold); }
+    .section-label { display: inline-flex; align-items: center; gap: 9px; }
+    .section-label::before { width: 23px; height: 3px; background: currentColor; content: ""; }
+    .lead-grid { display: grid; gap: 14px; }
+    .lead-card {
+      position: relative;
+      min-width: 0;
+      padding: 21px 20px 21px 58px;
+      background: var(--card);
+      border: 1px solid rgba(109, 91, 73, .18);
+      border-radius: 13px;
+      box-shadow: var(--shadow);
+    }
+    .lead-number { position: absolute; top: 21px; left: 20px; color: var(--brick); font-size: .78rem; font-weight: 850; }
+    .lead-card p { margin: 0; font-family: Iowan Old Style, Baskerville, Georgia, "Noto Serif SC", serif; font-size: 1.08rem; font-weight: 700; line-height: 1.55; }
+    .signal-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .signal-card { min-width: 0; padding: 16px; background: rgba(255, 253, 248, .72); border: 1px solid var(--line); border-radius: 11px; }
+    .signal-card span { display: block; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .signal-card strong { display: block; margin-top: 5px; font-size: .96rem; line-height: 1.4; }
+    .signal-card[data-tone="积极"] strong { color: #496b51; }
+    .signal-card[data-tone="警惕"] strong { color: var(--brick-deep); }
+    .news-list { margin: 0; padding: 0; list-style: none; counter-reset: news; }
+    .news-item {
+      position: relative;
+      min-width: 0;
+      padding: 24px 0 24px 46px;
+      border-top: 1px solid var(--line);
+      counter-increment: news;
+    }
+    .news-item:first-child { padding-top: 4px; border-top: 0; }
+    .news-item::before {
+      position: absolute;
+      top: 28px;
+      left: 0;
+      color: var(--section-accent);
+      font-size: .75rem;
+      font-weight: 850;
+      content: "0" counter(news);
+    }
+    .news-item:first-child::before { top: 8px; }
+    .item-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; }
+    .pill { padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--section-accent) 35%, transparent); border-radius: 999px; color: var(--section-accent); font-size: .68rem; font-weight: 850; line-height: 1.3; }
+    .news-item p { margin-bottom: 9px; color: #4c4640; font-size: .92rem; }
+    .news-item p strong { color: #27231f; }
+    .source-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; color: var(--muted); font-size: .75rem; line-height: 1.45; }
+    .source-link { color: var(--section-accent); font-weight: 800; text-underline-offset: 3px; }
+    .insight {
+      --section-accent: var(--brick);
+      margin-top: 64px;
+      padding: 28px 24px;
+      background: var(--brick-deep);
+      color: #fffaf3;
+      border-radius: 15px;
+      box-shadow: var(--shadow);
+    }
+    .insight .section-label { color: #dfb1a5; }
+    .insight h2 { color: #fff; }
+    .insight p { margin-bottom: 0; color: #f1e8df; }
+    .watch-list,
+    .impact-list,
+    .limitations-list { margin: 0; padding: 0; list-style: none; }
+    .watch-list li { display: grid; grid-template-columns: minmax(76px, .28fr) 1fr; gap: 15px; padding: 15px 0; border-top: 1px solid var(--line); }
+    .watch-list li:first-child { border-top: 0; }
+    .watch-list time { color: var(--brick); font-size: .76rem; font-weight: 850; }
+    .watch-list span { color: #45403b; font-size: .93rem; }
+    .impact-list { display: grid; gap: 12px; }
+    .impact-list li { padding: 17px; background: rgba(255, 253, 248, .66); border-left: 3px solid var(--brick); }
+    .impact-list h3 { font-size: 1rem; }
+    .impact-list p { margin-bottom: 6px; color: #4c4640; font-size: .9rem; }
+    .limitations { margin-top: 46px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); font-size: .82rem; }
+    .limitations h2 { margin-bottom: 10px; font-family: inherit; font-size: .84rem; letter-spacing: .05em; text-transform: uppercase; }
+    .limitations-list { padding-left: 18px; list-style: disc; }
+    .limitations-list li + li { margin-top: 6px; }
+    .button-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 38px; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 15px; border: 1px solid var(--brick); border-radius: 999px; color: var(--brick); font-size: .82rem; font-weight: 800; text-decoration: none; }
+    .button:hover { background: var(--brick); color: #fff; }
+    .site-footer { padding: 22px 0 max(34px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); color: var(--muted); font-size: .76rem; }
+    .site-footer p { margin-bottom: 0; }
+    @supports not (color: color-mix(in srgb, red 50%, white)) {
+      .pill { border-color: var(--line); }
+    }
+    @media (min-width: 620px) {
+      .signal-board { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .insight { padding: 36px; }
+    }
+    @media (max-width: 380px) {
+      .shell { width: min(calc(100% - 24px), 720px); }
+      .nav { align-items: flex-start; }
+      .nav-links { gap: 10px; }
+      .cover { padding-top: 42px; }
+      .news-item { padding-left: 37px; }
+      .watch-list li { grid-template-columns: 1fr; gap: 3px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    @media print { .site-header, .button-row { display: none; } body { background: #fff; } .cover { min-height: auto; } }
+  </style>
+</head>
+<body>
+  <header class="site-header shell">
+    <nav class="nav" aria-label="主导航">
+      <a class="brand" href="index.html">Philo Daily</a>
+      <div class="nav-links"><a href="index.html">首页</a><a href="archive.html">归档</a></div>
+    </nav>
+  </header>
+  <main class="shell">
+    <article>
+      <header class="cover" aria-labelledby="page-title">
+        <p class="eyebrow">Daily brief · 2026-08-04</p>
+        <h1 id="page-title">Philo<br>Daily Brief</h1>
+        <p class="deck">霍尔木兹海峡谈判启动叠加油价单日暴跌5.11%，地缘与市场情绪双向博弈；金价创历史新高，纳指大涨2.13%；OpenAI攻克10道数学难题，中美AI基建与出口同步加速；A股存储芯片重挫，第四代半导体大赛落地临港；LinkedIn深化AI内容治理，安森美AI数据中心收入预期翻倍。</p>
+        <div class="cover-meta">
+          <time datetime="2026-08-04">2026-08-04</time>
+          <span>V3 · 中文行业热点日报</span>
+          <span>5 分钟阅读</span>
+        </div>
+        <div class="cover-rule" aria-hidden="true"></div>
+      </header>
+
+      <section class="section" data-section="core" aria-labelledby="core-title">
+        <p class="section-label">Today in three</p>
+        <h2 id="core-title">今日核心结论</h2>
+        <div class="lead-grid">
+          <article class="lead-card"><span class="lead-number">01</span><p>全球能源通道风险再升温，但短期油价回落与美股走强显示市场对缓和预期部分定价</p></article>
+          <article class="lead-card"><span class="lead-number">02</span><p>AI能力边界持续外扩，从数学推理突破到资本开支激增，验证算力需求刚性与技术范式迁移</p></article>
+          <article class="lead-card"><span class="lead-number">03</span><p>中国AI出口占比达22.7%、第四代半导体工程化攻坚、AI芯片IP入法，标志‘体系出海’与制度适配双轨并进</p></article>
+        </div>
+      </section>
+
+      <section class="section" data-section="signals" aria-labelledby="signals-title">
+        <p class="section-label">Signal board</p>
+        <h2 id="signals-title">今日信号板</h2>
+        <div class="signal-board">
+          <div class="signal-card" data-tone="警惕"><span>地缘溢价</span><strong>霍尔木兹重开预期 vs 伊朗强硬警告</strong></div>
+          <div class="signal-card" data-tone="积极"><span>金价信号</span><strong>突破4110美元，花旗预测Q4达4500美元</strong></div>
+          <div class="signal-card" data-tone="积极"><span>AI基建强度</span><strong>北美四大云厂商Q2资本开支同比+79%</strong></div>
+          <div class="signal-card" data-tone="中性"><span>半导体政策</span><strong>《集成电路布图设计条例》修订强化AI芯片IP保护</strong></div>
+        </div>
+      </section>
+
+
+<section class="section " data-section="finance" aria-labelledby="finance-title">
+        <p class="section-label">Global finance</p>
+        <h2 id="finance-title">全球金融</h2>
+        <ol class="news-list">
+          <li class="news-item" data-news-item data-status="延续">
+            <div class="item-tags"><span class="pill">延续</span><span class="pill confidence">可信度 高</span></div>
+            <h3>美伊霍尔木兹海峡谈判进入第一阶段</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>特朗普称美伊谈判已启动，第一阶段目标为开放霍尔木兹海峡，最迟于2026年8月4日重开；伊朗方面强硬回应，警告美军部署将成打击目标。</p>
+            <p class="why-important"><strong>为什么重要：</strong>地缘政治风险直接影响全球能源运输通道与原油定价，引发市场对供应中断或缓和的双向博弈。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://m.nbd.com.cn/articles/2026-08-03/4530919.html" target="_blank" rel="noopener noreferrer">来源：每经网</a>
+              <time class="published-at" datetime="2026-08-04T08:00:00+08:00">发布时间：2026-08-04T08:00:00+08:00</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="新增">
+            <div class="item-tags"><span class="pill">新增</span><span class="pill confidence">可信度 高</span></div>
+            <h3>纽约期金突破4110美元创历史新高</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>纽约商品交易所黄金期货价格突破4110美元/盎司，日内涨0.48%；花旗预测2026年Q4金价或达4500美元。</p>
+            <p class="why-important"><strong>为什么重要：</strong>金价突破关键心理与技术关口，反映避险情绪升温及美元信用预期变化，影响全球资产配置再平衡。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://www.nbd.com.cn/articles/2026-08-03/4530919.html" target="_blank" rel="noopener noreferrer">来源：每经网</a>
+              <time class="published-at" datetime="2026-08-04T08:00:00+08:00">发布时间：2026-08-04T08:00:00+08:00</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="延续">
+            <div class="item-tags"><span class="pill">延续</span><span class="pill confidence">可信度 高</span></div>
+            <h3>美国原油期货单日暴跌5.11%</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>WTI原油期货收报80.34美元/桶，下跌4.33美元，跌幅5.11%，为近期最大单日跌幅。</p>
+            <p class="why-important"><strong>为什么重要：</strong>油价剧烈波动加剧能源股估值扰动，并可能触发商品期货保证金追缴与宏观对冲策略调整。</p>
+            <div class="source-meta">
+              <a class="source-link" href="http://finance.sina.com.cn/stock/cpbd/2026-08-04/doc-inimcatv5459047.shtml" target="_blank" rel="noopener noreferrer">来源：新浪网</a>
+              <time class="published-at" datetime="2026-08-04T08:00:00+08:00">发布时间：2026-08-04T08:00:00+08:00</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="新增">
+            <div class="item-tags"><span class="pill">新增</span><span class="pill confidence">可信度 高</span></div>
+            <h3>美股三大股指集体大涨纳指涨2.13%</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>道指涨1.32%，标普500涨1.48%，纳指涨2.13%，科技巨头普遍上扬，仅苹果微跌1.84%。</p>
+            <p class="why-important"><strong>为什么重要：</strong>风险资产同步走强反映市场对流动性预期改善与地缘紧张缓和的综合定价，影响全球跨市场资金流向。</p>
+            <div class="source-meta">
+              <a class="source-link" href="http://finance.sina.com.cn/headline/2026-08-04/doc-inimcatx2248161.shtml" target="_blank" rel="noopener noreferrer">来源：新浪网</a>
+              <time class="published-at" datetime="2026-08-04T08:00:00+08:00">发布时间：2026-08-04T08:00:00+08:00</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="新增">
+            <div class="item-tags"><span class="pill">新增</span><span class="pill confidence">可信度 高</span></div>
+            <h3>贝索斯申报拟售40.7亿美元亚马逊股票</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>亚马逊创始人杰夫·贝索斯向SEC提交10b5-1交易计划，拟出售价值40.7亿美元公司股票。</p>
+            <p class="why-important"><strong>为什么重要：</strong>顶级科技领袖大规模减持信号引发市场对科技股估值可持续性与内部人信心的再评估。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://finance.sina.com.cn/money/bond/2026-08-04/doc-inimcatp4173494.shtml?froms=pccs" target="_blank" rel="noopener noreferrer">来源：新浪网</a>
+              <time class="published-at" datetime="2026-08-04T08:00:00+08:00">发布时间：2026-08-04T08:00:00+08:00</time>
+            </div>
+          </li>
+        </ol>
+      </section>
+<section class="section section--ai" data-section="ai" aria-labelledby="ai-title">
+        <p class="section-label">Artificial intelligence</p>
+        <h2 id="ai-title">AI 行业</h2>
+        <ol class="news-list">
+          <li class="news-item" data-news-item data-status="新增">
+            <div class="item-tags"><span class="pill">新增</span><span class="pill confidence">可信度 高</span></div>
+            <h3>OpenAI新模型攻克10道数学未解难题</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>OpenAI宣布其最新模型在高维几何、编码理论、群论等数学领域取得突破性进展，成功解决10道长期悬而未决的难题，并已通过计算机证明系统验证。</p>
+            <p class="why-important"><strong>为什么重要：</strong>标志AI推理能力实现质的飞跃，挑战传统数学研究范式，引发对学术规范与AI科研角色的深度讨论。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://zhuanlan.zhihu.com/p/2067955941195224648" target="_blank" rel="noopener noreferrer">来源：知乎</a>
+              <time class="published-at" datetime="2026-08-04">发布时间：2026-08-04</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="新增">
+            <div class="item-tags"><span class="pill">新增</span><span class="pill confidence">可信度 高</span></div>
+            <h3>北美四大云厂商Q2资本开支同比激增79%</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>亚马逊、谷歌、微软、Meta 2026年二季度合计资本开支达1712–1820亿美元，同比上涨79%，并上调全年AI基建支出指引至约7325亿美元。</p>
+            <p class="why-important"><strong>为什么重要：</strong>印证AI需求端持续强劲，算力基础设施扩张进入加速期，对全球芯片、服务器、光模块供应链构成刚性拉动。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://k.sina.com.cn/article_7857201856_1d45362c001908i5ko.html" target="_blank" rel="noopener noreferrer">来源：新浪网</a>
+              <time class="published-at" datetime="2026-08-04">发布时间：2026-08-04</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="新增">
+            <div class="item-tags"><span class="pill">新增</span><span class="pill confidence">可信度 高</span></div>
+            <h3>中国AI出口占整体出口比重达22.7%</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>2026年上半年，中国AI相关产品出口占全国总出口比重为22.7%，拉动整体出口增长8.6个百分点，成为外贸‘新新三样’核心引擎。</p>
+            <p class="why-important"><strong>为什么重要：</strong>反映中国AI产业从技术输出转向‘体系出海’，大模型开源生态与硬件协同出海重塑全球AI发展格局。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://k.sina.com.cn/article_7857201856_1d45362c001908i5eo.html" target="_blank" rel="noopener noreferrer">来源：新浪网</a>
+              <time class="published-at" datetime="2026-08-04">发布时间：2026-08-04</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="延续">
+            <div class="item-tags"><span class="pill">延续</span><span class="pill confidence">可信度 高</span></div>
+            <h3>美国敲定前沿AI模型自愿安全测试方案</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>美国政府完成前沿AI模型网络安全测试框架设计，并于2026年8月4日邀请OpenAI、Google、Anthropic、Meta共同讨论执行机制。</p>
+            <p class="why-important"><strong>为什么重要：</strong>标志美式AI治理从原则宣示迈向实操阶段，为后续强制性监管铺路，影响全球头部模型安全标准演进路径。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://k.sina.com.cn/article_7857201856_1d45362c001908i60u.html" target="_blank" rel="noopener noreferrer">来源：新浪网</a>
+              <time class="published-at" datetime="2026-08-04">发布时间：2026-08-04</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="新增">
+            <div class="item-tags"><span class="pill">新增</span><span class="pill confidence">可信度 高</span></div>
+            <h3>之江实验室王坚：AI应像纸一样便宜</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>中国工程院院士、之江实验室主任王坚提出‘智能计算’核心理念——计算依靠智能、计算为了智能，并强调AI基础设施需走向普惠化与低成本化。</p>
+            <p class="why-important"><strong>为什么重要：</strong>揭示中国AI底层发展逻辑转向规模化落地与可及性，呼应全球对算力民主化与绿色AI的迫切诉求。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://k.sina.com.cn/article_7857201856_1d45362c001908i35s.html" target="_blank" rel="noopener noreferrer">来源：新浪网</a>
+              <time class="published-at" datetime="2026-08-04">发布时间：2026-08-04</time>
+            </div>
+          </li>
+        </ol>
+      </section>
+<section class="section " data-section="semiconductors" aria-labelledby="semiconductors-title">
+        <p class="section-label">Semiconductors</p>
+        <h2 id="semiconductors-title">半导体重点</h2>
+        <ol class="news-list">
+          <li class="news-item" data-news-item data-status="新增">
+            <div class="item-tags"><span class="pill">新增</span><span class="pill confidence">可信度 高</span></div>
+            <h3>A股存储芯片股集体重挫</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>8月3日午后，A股存储芯片板块大幅下挫，兆易创新跌停，寒武纪跌超7%，中微公司跌超9%。</p>
+            <p class="why-important"><strong>为什么重要：</strong>反映HBM供应链短期承压与先进封装产能瓶颈对二级市场情绪的即时冲击。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://stock.10jqka.com.cn/20260803/c678622356.shtml" target="_blank" rel="noopener noreferrer">来源：同花顺财经网</a>
+              <time class="published-at" datetime="2026-08-03">发布时间：2026-08-03</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="延续">
+            <div class="item-tags"><span class="pill">延续</span><span class="pill confidence">可信度 高</span></div>
+            <h3>第四代半导体大赛总决赛在临港举行</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>2026司南杯第四代半导体创新创业大赛总决赛于7月30日在临港新片区举办，聚焦氧化镓、金刚石、氮化铝三大前沿赛道。</p>
+            <p class="why-important"><strong>为什么重要：</strong>标志着中国在第四代半导体全链条布局进入工程化攻坚阶段，与AI、新能源汽车等战略场景深度耦合。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://www.jfdaily.com/staticsg/res/html/web/newsDetail.html?id=1153098" target="_blank" rel="noopener noreferrer">来源：解放网</a>
+              <time class="published-at" datetime="2026-07-30">发布时间：2026-07-30</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="新增">
+            <div class="item-tags"><span class="pill">新增</span><span class="pill confidence">可信度 高</span></div>
+            <h3>国务院修订《集成电路布图设计条例》</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>李强签署国务院令，公布修订后的《集成电路布图设计保护条例》，强化AI芯片IP确权与跨境数据合规条款。</p>
+            <p class="why-important"><strong>为什么重要：</strong>首次将AI芯片设计成果纳入国家级知识产权保护框架，影响社媒平台AI模型训练数据来源合法性边界。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://www.tmtpost.com/" target="_blank" rel="noopener noreferrer">来源：钛媒体观察</a>
+              <time class="published-at" datetime="2026-08-03">发布时间：2026-08-03</time>
+            </div>
+          </li>
+        </ol>
+      </section>
+<section class="section section--social" data-section="social" aria-labelledby="social-title">
+        <p class="section-label">Social pulse</p>
+        <h2 id="social-title">社媒趋势</h2>
+        <ol class="news-list">
+          <li class="news-item" data-news-item data-status="延续">
+            <div class="item-tags"><span class="pill">延续</span><span class="pill confidence">可信度 高</span></div>
+            <h3>LinkedIn测试AI低质内容举报反馈机制</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>LinkedIn正内测新功能，允许用户标记并反馈疑似低质AI生成的帖子与评论。</p>
+            <p class="why-important"><strong>为什么重要：</strong>从被动过滤转向用户协同治理，为行业建立可扩展的AI内容可信评估路径。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://www.news.cn/20260604/36f95fa42cf1443b855fcae02c12f16b/c.html" target="_blank" rel="noopener noreferrer">来源：新华网</a>
+              <time class="published-at" datetime="2026-08-03">发布时间：2026-08-03</time>
+            </div>
+          </li>
+          <li class="news-item" data-news-item data-status="新增">
+            <div class="item-tags"><span class="pill">新增</span><span class="pill confidence">可信度 高</span></div>
+            <h3>安森美预计AI数据中心全年收入翻倍</h3>
+            <p class="what-happened"><strong>发生了什么：</strong>安森美半导体公布亮眼业绩，预计2026年AI数据中心相关收入将实现全年翻倍增长。</p>
+            <p class="why-important"><strong>为什么重要：</strong>反映AI算力基建对功率半导体需求的实质性拉动，验证第四代半导体下游应用加速落地。</p>
+            <div class="source-meta">
+              <a class="source-link" href="https://k.sina.com.cn/article_7857201856_1d45362c001908hznk.html" target="_blank" rel="noopener noreferrer">来源：新浪网</a>
+              <time class="published-at" datetime="2026-08-04">发布时间：2026-08-04</time>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <aside class="insight" data-section="insight" aria-labelledby="insight-title">
+        <p class="section-label">Philo synthesis</p>
+        <h2 id="insight-title">Philo Insight</h2>
+        <p>今日事件呈现三重结构性张力：（1）地缘风险与市场定价的错位——霍尔木兹谈判启动却伴随油价暴跌与金价飙升，显示风险溢价尚未统一；（2）AI能力跃迁与基建投入的共振——数学突破与79%资本开支增长共同指向‘推理即服务’时代临近；（3）中国AI出海从单点技术转向制度适配——出口占比22.7%与AI芯片IP入法同步发生，体现‘硬科技+软规则’双轮驱动。跟踪重点：美伊谈判实际进展、HBM封装产能释放节奏、LinkedIn举报机制试点效果。</p>
+      </aside>
+
+      <section class="section" data-section="tracking" aria-labelledby="tracking-title">
+        <p class="section-label">Tracking lens</p>
+        <h2 id="tracking-title">重点跟踪方向影响</h2>
+        <ul class="impact-list">
+          <li><h3>能源运输</h3><p><strong>影响：</strong>霍尔木兹若如期重开，中东原油出口成本下降约12–15%</p><p><strong>继续观察：</strong>伊朗港口实时吞吐量数据</p></li>
+          <li><h3>资产配置</h3><p><strong>影响：</strong>金价突破4110美元或触发ETF资金单周净流入超32亿美元</p><p><strong>继续观察：</strong>SPDR Gold Trust持仓变动</p></li>
+          <li><h3>AI算力</h3><p><strong>影响：</strong>北美云厂商资本开支激增将使2026年HBM3采购量同比+110%</p><p><strong>继续观察：</strong>SK海力士HBM3季度出货量</p></li>
+        </ul>
+      </section>
+
+      <section class="section" data-section="tomorrow" aria-labelledby="tomorrow-title">
+        <p class="section-label">Next 24 hours</p>
+        <h2 id="tomorrow-title">未来 24 小时观察</h2>
+        <ul class="watch-list">
+          <li><time>24小时内</time><span>霍尔木兹海峡是否出现美军舰艇重新部署信号</span></li>
+          <li><time>24小时内</time><span>OpenAI公布数学难题详细证明过程及开源接口</span></li>
+          <li><time>48小时内</time><span>安森美AI数据中心订单明细与客户结构披露</span></li>
+          <li><time>72小时内</time><span>国务院条例修订配套实施细则草案征求意见</span></li>
+        </ul>
+      </section>
+
+      <aside class="limitations" aria-labelledby="limitations-title">
+        <h2 id="limitations-title">数据与方法限制</h2>
+        <ul class="limitations-list">
+          <li>社媒趋势栏目中LinkedIn与安森美事件均无平台级热度量化指标（如DAU影响率、内容占比），仅基于功能上线与财报预测判断</li>
+          <li>A股存储芯片股下挫原因未明确归因于单一因素（HBM缺货/库存修正/地缘传导），需后续产业链调研验证</li>
+        </ul>
+      </aside>
+
+      <div class="button-row"><a class="button" href="index.html">← 返回首页</a><a class="button" href="archive.html">查看历史归档</a></div>
+    </article>
+  </main>
+  <footer class="site-footer shell"><p>Philo Daily Brief · 2026-08-04 · 自动生成后经结构与链接完整性检查 · 不构成投资建议</p></footer>
+</body>
+</html>

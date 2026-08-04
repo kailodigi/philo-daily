@@ -1,46 +1,118 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-03T18:30:00+08:00",
+  "updated_at": "2026-08-04T17:13:42+08:00",
   "events": [
     {
-      "id": "2026-08-03-finance-oil-iran-talks",
-      "first_seen": "2026-08-03",
-      "last_seen": "2026-08-03",
-      "category": "全球金融",
-      "title": "美伊谈判预期推动原油风险溢价回落",
-      "source_url": "https://www.lse.co.uk/news/global-markets-oil-slumps-on-hopes-of-iran-deal-yen-firms-after-intervention-l7cqn48vtdvdi4u.html"
+      "id": "2026-08-04-8bb8ee22c1270345",
+      "first_seen": "2026-08-04",
+      "last_seen": "2026-08-04",
+      "category": "社媒趋势",
+      "title": "安森美预计AI数据中心全年收入翻倍",
+      "source_url": "https://k.sina.com.cn/article_7857201856_1d45362c001908hznk.html"
     },
     {
-      "id": "2026-08-03-finance-yen-intervention",
+      "id": "2026-08-03-social-linkedin-slop",
       "first_seen": "2026-08-03",
-      "last_seen": "2026-08-03",
-      "category": "全球金融",
-      "title": "日本与美国协调买入日元",
-      "source_url": "https://apnews.com/article/stocks-markets-dollar-yen-trump-oil-d19a8f9a77b6fceca41da3e4b6bf17aa"
-    },
-    {
-      "id": "2026-08-03-ai-openai-ohio-financing",
-      "first_seen": "2026-08-03",
-      "last_seen": "2026-08-03",
-      "category": "AI行业",
-      "title": "OpenAI大型数据中心融资结构仍在讨论",
-      "source_url": "https://www.nytimes.com/2026/07/27/technology/openai-data-center-nvidia.html"
-    },
-    {
-      "id": "2026-08-03-ai-naver-factory",
-      "first_seen": "2026-08-03",
-      "last_seen": "2026-08-03",
-      "category": "AI行业",
-      "title": "Naver讨论轻资产AI工厂融资方案",
-      "source_url": "https://www.digitaltoday.co.kr/en/view/88334/naver-ai-factory-in-talks-on-nvidia-gpus-brookfield-funding-to-cut-investment-burden"
+      "last_seen": "2026-08-04",
+      "category": "社媒趋势",
+      "title": "LinkedIn测试AI低质内容举报反馈机制",
+      "source_url": "https://www.news.cn/20260604/36f95fa42cf1443b855fcae02c12f16b/c.html"
     },
     {
       "id": "2026-08-03-chips-packaging",
       "first_seen": "2026-08-03",
-      "last_seen": "2026-08-03",
+      "last_seen": "2026-08-04",
       "category": "半导体重点",
-      "title": "先进封装供给成为AI芯片瓶颈",
-      "source_url": "https://apps.digitimes.com/news/a20260803VL206/intel-tsmc-2nm-ddr4-samsung.html"
+      "title": "第四代半导体大赛总决赛在临港举行",
+      "source_url": "https://www.jfdaily.com/staticsg/res/html/web/newsDetail.html?id=1153098"
+    },
+    {
+      "id": "2026-08-04-5b647cdaf1bca531",
+      "first_seen": "2026-08-04",
+      "last_seen": "2026-08-04",
+      "category": "半导体重点",
+      "title": "国务院修订《集成电路布图设计条例》",
+      "source_url": "https://www.tmtpost.com/"
+    },
+    {
+      "id": "2026-08-04-61d49de9cc126d8d",
+      "first_seen": "2026-08-04",
+      "last_seen": "2026-08-04",
+      "category": "半导体重点",
+      "title": "A股存储芯片股集体重挫",
+      "source_url": "https://stock.10jqka.com.cn/20260803/c678622356.shtml"
+    },
+    {
+      "id": "2026-08-04-252c6b49abe4b61c",
+      "first_seen": "2026-08-04",
+      "last_seen": "2026-08-04",
+      "category": "全球金融",
+      "title": "贝索斯申报拟售40.7亿美元亚马逊股票",
+      "source_url": "https://finance.sina.com.cn/money/bond/2026-08-04/doc-inimcatp4173494.shtml?froms=pccs"
+    },
+    {
+      "id": "2026-08-04-5fe1636c3967041a",
+      "first_seen": "2026-08-04",
+      "last_seen": "2026-08-04",
+      "category": "全球金融",
+      "title": "美股三大股指集体大涨纳指涨2.13%",
+      "source_url": "http://finance.sina.com.cn/headline/2026-08-04/doc-inimcatx2248161.shtml"
+    },
+    {
+      "id": "2026-08-03-finance-oil-iran-talks",
+      "first_seen": "2026-08-03",
+      "last_seen": "2026-08-04",
+      "category": "全球金融",
+      "title": "美国原油期货单日暴跌5.11%",
+      "source_url": "http://finance.sina.com.cn/stock/cpbd/2026-08-04/doc-inimcatv5459047.shtml"
+    },
+    {
+      "id": "2026-08-04-302496cfdb94d188",
+      "first_seen": "2026-08-04",
+      "last_seen": "2026-08-04",
+      "category": "全球金融",
+      "title": "纽约期金突破4110美元创历史新高",
+      "source_url": "https://www.nbd.com.cn/articles/2026-08-03/4530919.html"
+    },
+    {
+      "id": "2026-08-03-ai-openai-ohio-financing",
+      "first_seen": "2026-08-03",
+      "last_seen": "2026-08-04",
+      "category": "AI行业",
+      "title": "美国敲定前沿AI模型自愿安全测试方案",
+      "source_url": "https://k.sina.com.cn/article_7857201856_1d45362c001908i60u.html"
+    },
+    {
+      "id": "2026-08-04-33efe561ca4b3dd5",
+      "first_seen": "2026-08-04",
+      "last_seen": "2026-08-04",
+      "category": "AI行业",
+      "title": "北美四大云厂商Q2资本开支同比激增79%",
+      "source_url": "https://k.sina.com.cn/article_7857201856_1d45362c001908i5ko.html"
+    },
+    {
+      "id": "2026-08-04-0eba9cf680dcdeb0",
+      "first_seen": "2026-08-04",
+      "last_seen": "2026-08-04",
+      "category": "AI行业",
+      "title": "之江实验室王坚：AI应像纸一样便宜",
+      "source_url": "https://k.sina.com.cn/article_7857201856_1d45362c001908i35s.html"
+    },
+    {
+      "id": "2026-08-04-db73bc6f15aa58c9",
+      "first_seen": "2026-08-04",
+      "last_seen": "2026-08-04",
+      "category": "AI行业",
+      "title": "中国AI出口占整体出口比重达22.7%",
+      "source_url": "https://k.sina.com.cn/article_7857201856_1d45362c001908i5eo.html"
+    },
+    {
+      "id": "2026-08-04-9c863220f3dcfa8e",
+      "first_seen": "2026-08-04",
+      "last_seen": "2026-08-04",
+      "category": "AI行业",
+      "title": "OpenAI新模型攻克10道数学未解难题",
+      "source_url": "https://zhuanlan.zhihu.com/p/2067955941195224648"
     },
     {
       "id": "2026-08-03-social-snap-ai-video",
@@ -51,12 +123,20 @@
       "source_url": "https://ppc.land/snap-blocks-ai-only-videos-from-spotlight-as-contributors-climb-120/"
     },
     {
-      "id": "2026-08-03-social-linkedin-slop",
+      "id": "2026-08-03-finance-yen-intervention",
       "first_seen": "2026-08-03",
       "last_seen": "2026-08-03",
-      "category": "社媒趋势",
-      "title": "LinkedIn测试低质AI内容反馈机制",
-      "source_url": "https://www.socialsamosa.com/news-2/linkedin-tests-option-report-ai-slop-posts-comments-12222974"
+      "category": "全球金融",
+      "title": "日本与美国协调买入日元",
+      "source_url": "https://apnews.com/article/stocks-markets-dollar-yen-trump-oil-d19a8f9a77b6fceca41da3e4b6bf17aa"
+    },
+    {
+      "id": "2026-08-03-ai-naver-factory",
+      "first_seen": "2026-08-03",
+      "last_seen": "2026-08-03",
+      "category": "AI行业",
+      "title": "Naver讨论轻资产AI工厂融资方案",
+      "source_url": "https://www.digitaltoday.co.kr/en/view/88334/naver-ai-factory-in-talks-on-nvidia-gpus-brookfield-funding-to-cut-investment-burden"
     }
   ]
 }
