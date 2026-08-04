@@ -675,17 +675,20 @@ def collect_candidates(
         ]
         if invalid_categories:
             raise ValueError(f"Unexpected candidate categories in {plan['name']}")
-        missing = [
-            item.source_url
+        verified = [
+            item
             for item in batch.candidates
-            if not source_matches(item.source_url, source_urls)
+            if source_matches(item.source_url, source_urls)
         ]
-        if missing:
-            raise ValueError(
-                f"{plan['name']} candidates contain URLs absent from DashScope search: {missing[:2]}"
+        discarded = len(batch.candidates) - len(verified)
+        if discarded:
+            LOG.warning(
+                "Discarded %d %s candidate(s) whose URLs were absent from DashScope search",
+                discarded,
+                plan["name"],
             )
         filtered = filter_candidate_recency(
-            batch.candidates, date.fromisoformat(brief_date), history
+            verified, date.fromisoformat(brief_date), history
         )
         for category, minimum in plan["minimum"].items():
             count = sum(item.category == category for item in filtered)
