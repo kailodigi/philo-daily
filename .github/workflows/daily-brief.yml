@@ -68,7 +68,6 @@ jobs:
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           DASHSCOPE_MODEL: qwen-plus
-          DASHSCOPE_BASE_HTTP_API_URL: https://ws-4za5cnwrs3b5m5nk.cn-beijing.maas.aliyuncs.com/api/v1
           DASHSCOPE_TIMEOUT_SECONDS: "120"
           DASHSCOPE_SEARCH_MAX_TOKENS: "2400"
           DASHSCOPE_FINAL_MAX_TOKENS: "6000"
