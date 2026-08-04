@@ -90,7 +90,7 @@ class SelectedCandidateItem(StrictModel):
 
 
 class SelectedCandidateBatch(StrictModel):
-    selections: dict[str, SelectedCandidateItem] = Field(min_length=15, max_length=16)
+    selections: dict[str, SelectedCandidateItem] = Field(min_length=14, max_length=15)
 
 
 class Signal(StrictModel):
@@ -252,7 +252,7 @@ SEARCH_PLANS = (
         "name": "社媒趋势",
         "prefix": "T",
         "categories": ("社媒趋势",),
-        "minimum": {"社媒趋势": 3},
+        "minimum": {"社媒趋势": 2},
         "limit": 6,
         "focus": "社交平台政策、内容分发、创作者生态、AI内容治理与可信社媒行业趋势",
         "priority": "平台官方公告优先，其次 Reuters、Bloomberg、FT 与可靠社媒行业媒体",
@@ -986,7 +986,7 @@ def collect_candidates(
     semiconductor_target = min(3, available_semiconductors)
     if semiconductor_target < 2:
         raise ValueError("Fewer than 2 timely semiconductor candidates are available")
-    selection_total = 13 + semiconductor_target
+    selection_total = 12 + semiconductor_target
 
     mapping_prompt = f"""今天是 {brief_date}（北京时间）。把联网检索生成的候选与代码提供的真实来源目录进行语义匹配、排序和去重。
 
@@ -998,11 +998,11 @@ def collect_candidates(
 {json.dumps(SelectedCandidateBatch.model_json_schema(), ensure_ascii=False, separators=(',', ':'))}
 
 硬性要求：
-- 恰好选择 {selection_total} 条：全球金融 5、AI行业 5、半导体重点 {semiconductor_target}、社媒趋势 3。社媒多选 1 条作为事件去重的备用候选。
+- 恰好选择 {selection_total} 条：全球金融 5、AI行业 5、半导体重点 {semiconductor_target}、社媒趋势 2。
 - selections 必须是以真实 source_id 为键的 JSON 对象，恰好包含 {selection_total} 个不同键；每个键必须逐字来自真实来源目录；不要输出 URL 或来源名。
 - 只在候选事实与来源标题语义对应时绑定；无法可靠对应的候选不得采用。
 - 真实来源目录提供 source_date 时，published_date 和 published_at 的日期必须与 source_date 一致。
-- 同一事件即使来源不同也只能选择一次；半导体 {semiconductor_target} 条和社媒 3 条必须分别描述不同事件，不能用同一发布或同一公司动作拆成多条。
+- 同一事件即使来源不同也只能选择一次；半导体 {semiconductor_target} 条和社媒 2 条必须分别描述不同事件，不能用同一发布或同一公司动作拆成多条。
 - 优先过去 24 小时；超过 48 小时只能标为“延续”且 continuation_of 必须对应过去 7 天事件。
 - 不增加候选草稿之外的事件、数字或热度；社媒量化不足时明确限制。
 - 只返回 JSON 对象。
@@ -1027,7 +1027,7 @@ def collect_candidates(
         "全球金融": 5,
         "AI行业": 5,
         "半导体重点": semiconductor_target,
-        "社媒趋势": 3,
+        "社媒趋势": 2,
     }
     for category, expected in selection_quotas.items():
         actual = sum(
@@ -1270,4 +1270,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
