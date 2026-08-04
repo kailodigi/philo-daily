@@ -1,0 +1,130 @@
+name: Daily Philo Brief
+
+on:
+  schedule:
+    # 23:15 UTC = 07:15 Asia/Shanghai on the following day.
+    - cron: "15 23 * * *"
+  workflow_dispatch:
+    inputs:
+      brief_date:
+        description: "Optional Beijing date (YYYY-MM-DD); blank uses today"
+        required: false
+        type: string
+
+concurrency:
+  group: daily-philo-brief-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      brief_date: ${{ steps.date.outputs.brief_date }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Resolve Beijing date
+        id: date
+        env:
+          REQUESTED_DATE: ${{ inputs.brief_date }}
+        run: |
+          if [[ -n "$REQUESTED_DATE" ]]; then
+            BRIEF_DATE="$REQUESTED_DATE"
+          else
+            BRIEF_DATE="$(TZ=Asia/Shanghai date +%F)"
+          fi
+          if [[ ! "$BRIEF_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "::error::brief_date must use YYYY-MM-DD"
+            exit 2
+          fi
+          echo "BRIEF_DATE=$BRIEF_DATE" >> "$GITHUB_ENV"
+          echo "brief_date=$BRIEF_DATE" >> "$GITHUB_OUTPUT"
+
+      - name: Check OpenAI secret
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [[ -z "$OPENAI_API_KEY" ]]; then
+            echo "::error::Repository secret OPENAI_API_KEY is not configured"
+            exit 2
+          fi
+
+      - name: Generate candidate daily brief
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-5.6
+          OPENAI_TIMEOUT_SECONDS: "120"
+          OPENAI_MAX_OUTPUT_TOKENS: "9000"
+        run: python scripts/generate_daily.py --date "$BRIEF_DATE"
+
+      - name: Validate candidate daily HTML
+        run: >-
+          python scripts/validate_html.py
+          ".build/$BRIEF_DATE.html"
+          --site-root .
+          --public-path "$BRIEF_DATE.html"
+
+      - name: Promote daily and update indexes
+        run: python scripts/update_archive.py --date "$BRIEF_DATE"
+
+      - name: Validate promoted site
+        run: >-
+          python scripts/validate_html.py
+          "$BRIEF_DATE.html" index.html archive.html
+          --site-root .
+
+      - name: Commit generated artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$BRIEF_DATE.html" index.html archive.html data/previous_events.json
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+          else
+            git commit -m "Publish Philo Daily Brief $BRIEF_DATE"
+            git push origin HEAD:main
+          fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build static Pages artifact
+        run: |
+          mkdir -p _site
+          find . -maxdepth 1 -type f -name '*.html' -exec cp '{}' _site/ \;
+          cp styles.css .nojekyll _site/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+          include-hidden-files: true
+
+  deploy:
+    needs: generate
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy current workflow artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
