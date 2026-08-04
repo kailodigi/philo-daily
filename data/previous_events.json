@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-08-03T18:30:00+08:00",
+  "events": [
+    {
+      "id": "2026-08-03-finance-oil-iran-talks",
+      "first_seen": "2026-08-03",
+      "last_seen": "2026-08-03",
+      "category": "全球金融",
+      "title": "美伊谈判预期推动原油风险溢价回落",
+      "source_url": "https://www.lse.co.uk/news/global-markets-oil-slumps-on-hopes-of-iran-deal-yen-firms-after-intervention-l7cqn48vtdvdi4u.html"
+    },
+    {
+      "id": "2026-08-03-finance-yen-intervention",
+      "first_seen": "2026-08-03",
+      "last_seen": "2026-08-03",
+      "category": "全球金融",
+      "title": "日本与美国协调买入日元",
+      "source_url": "https://apnews.com/article/stocks-markets-dollar-yen-trump-oil-d19a8f9a77b6fceca41da3e4b6bf17aa"
+    },
+    {
+      "id": "2026-08-03-ai-openai-ohio-financing",
+      "first_seen": "2026-08-03",
+      "last_seen": "2026-08-03",
+      "category": "AI行业",
+      "title": "OpenAI大型数据中心融资结构仍在讨论",
+      "source_url": "https://www.nytimes.com/2026/07/27/technology/openai-data-center-nvidia.html"
+    },
+    {
+      "id": "2026-08-03-ai-naver-factory",
+      "first_seen": "2026-08-03",
+      "last_seen": "2026-08-03",
+      "category": "AI行业",
+      "title": "Naver讨论轻资产AI工厂融资方案",
+      "source_url": "https://www.digitaltoday.co.kr/en/view/88334/naver-ai-factory-in-talks-on-nvidia-gpus-brookfield-funding-to-cut-investment-burden"
+    },
+    {
+      "id": "2026-08-03-chips-packaging",
+      "first_seen": "2026-08-03",
+      "last_seen": "2026-08-03",
+      "category": "半导体重点",
+      "title": "先进封装供给成为AI芯片瓶颈",
+      "source_url": "https://apps.digitimes.com/news/a20260803VL206/intel-tsmc-2nm-ddr4-samsung.html"
+    },
+    {
+      "id": "2026-08-03-social-snap-ai-video",
+      "first_seen": "2026-08-03",
+      "last_seen": "2026-08-03",
+      "category": "社媒趋势",
+      "title": "Snap降低纯AI视频的推荐资格",
+      "source_url": "https://ppc.land/snap-blocks-ai-only-videos-from-spotlight-as-contributors-climb-120/"
+    },
+    {
+      "id": "2026-08-03-social-linkedin-slop",
+      "first_seen": "2026-08-03",
+      "last_seen": "2026-08-03",
+      "category": "社媒趋势",
+      "title": "LinkedIn测试低质AI内容反馈机制",
+      "source_url": "https://www.socialsamosa.com/news-2/linkedin-tests-option-report-ai-slop-posts-comments-12222974"
+    }
+  ]
+}
