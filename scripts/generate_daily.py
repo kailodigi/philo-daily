@@ -18,6 +18,7 @@ from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
+import dashscope
 from dashscope import Generation
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -811,6 +812,20 @@ def main() -> int:
         brief = DailyBrief.model_validate_json(args.input_json.read_text(encoding="utf-8"))
         response_urls = {normalize_url(str(item.source_url)) for _, item in iter_news(brief)}
     else:
+        base_http_api_url = os.environ.get("DASHSCOPE_BASE_HTTP_API_URL", "").strip()
+        if base_http_api_url:
+            parsed_base_url = urlsplit(base_http_api_url)
+            if (
+                parsed_base_url.scheme != "https"
+                or not parsed_base_url.hostname
+                or not parsed_base_url.hostname.endswith(".aliyuncs.com")
+                or parsed_base_url.path.rstrip("/") != "/api/v1"
+            ):
+                raise ValueError(
+                    "DASHSCOPE_BASE_HTTP_API_URL must be an HTTPS Alibaba Cloud "
+                    "Model Studio /api/v1 endpoint"
+                )
+            dashscope.base_http_api_url = base_http_api_url.rstrip("/")
         timeout_seconds = int(os.environ.get("DASHSCOPE_TIMEOUT_SECONDS", "120"))
         search_max_tokens = int(os.environ.get("DASHSCOPE_SEARCH_MAX_TOKENS", "2400"))
         final_max_tokens = int(os.environ.get("DASHSCOPE_FINAL_MAX_TOKENS", "6000"))
