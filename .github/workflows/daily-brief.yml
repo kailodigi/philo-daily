@@ -55,21 +55,22 @@ jobs:
           echo "BRIEF_DATE=$BRIEF_DATE" >> "$GITHUB_ENV"
           echo "brief_date=$BRIEF_DATE" >> "$GITHUB_OUTPUT"
 
-      - name: Check OpenAI secret
+      - name: Check DashScope secret
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
         run: |
-          if [[ -z "$OPENAI_API_KEY" ]]; then
-            echo "::error::Repository secret OPENAI_API_KEY is not configured"
+          if [[ -z "$DASHSCOPE_API_KEY" ]]; then
+            echo "::error::Repository secret DASHSCOPE_API_KEY is not configured"
             exit 2
           fi
 
       - name: Generate candidate daily brief
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: gpt-5.6
-          OPENAI_TIMEOUT_SECONDS: "120"
-          OPENAI_MAX_OUTPUT_TOKENS: "9000"
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          DASHSCOPE_MODEL: qwen-plus
+          DASHSCOPE_TIMEOUT_SECONDS: "120"
+          DASHSCOPE_SEARCH_MAX_TOKENS: "2400"
+          DASHSCOPE_FINAL_MAX_TOKENS: "6000"
         run: python scripts/generate_daily.py --date "$BRIEF_DATE"
 
       - name: Validate candidate daily HTML
@@ -92,7 +93,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$BRIEF_DATE.html" index.html archive.html data/previous_events.json
+          git add "$BRIEF_DATE.html" index.html archive.html data/previous_events.json data/usage.json
           if git diff --cached --quiet; then
             echo "No generated changes to commit."
           else
