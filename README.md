@@ -37,7 +37,7 @@ Philo Daily Brief 是一个由 GitHub Actions 定时生成和发布的中文行�
 
 仓库 `Settings → Secrets and variables → Actions` 中需要存在名为 `DASHSCOPE_API_KEY` 的 Repository secret。密钥只由工作流注入进程环境，不得写入代码、日志、HTML 或提交记录。
 
-工作流同时使用默认业务空间的专属北京地域端点 `https://ws-4za5cnwrs3b5m5nk.cn-beijing.maas.aliyuncs.com/api/v1`。该地址不是凭证；它用于确保 `sk-ws-` 工作空间密钥在所属地域调用 `qwen-plus`。生成器只接受 HTTPS 且域名以 `.aliyuncs.com` 结尾的 `/api/v1` 端点。
+生产工作流使用 DashScope SDK 的默认北京公共端点，适配同地域工作空间 Key。生成器也支持通过非敏感环境变量 `DASHSCOPE_BASE_HTTP_API_URL` 配置业务空间专属端点，并且只接受 HTTPS、域名以 `.aliyuncs.com` 结尾的 `/api/v1` 地址。
 
 GitHub Pages 的 Build and deployment Source 需要设置为 **GitHub Actions**。
 
