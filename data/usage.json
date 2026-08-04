@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "pricing_note": "Conservative estimate; actual Alibaba Cloud billing and FX may differ.",
+  "pricing_assumptions": {
+    "qwen_plus_input_cny_per_million_tokens": 0.8,
+    "qwen_plus_output_cny_per_million_tokens": 2.0,
+    "web_search_estimate_cny_per_call": 0.05,
+    "cny_per_usd_estimate": 7.0,
+    "monthly_budget_usd": 5.0
+  },
+  "days": []
+}
