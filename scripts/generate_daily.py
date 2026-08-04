@@ -90,7 +90,7 @@ class SelectedCandidateItem(StrictModel):
 
 
 class SelectedCandidateBatch(StrictModel):
-    selections: dict[str, SelectedCandidateItem] = Field(min_length=15, max_length=16)
+    selections: dict[str, SelectedCandidateItem] = Field(min_length=1, max_length=20)
 
 
 class Signal(StrictModel):
@@ -1007,36 +1007,71 @@ def collect_candidates(
 - 不增加候选草稿之外的事件、数字或热度；社媒量化不足时明确限制。
 - 只返回 JSON 对象。
 """
-    selected_payload, _ = call_dashscope_json(
-        api_key=api_key,
-        model=model,
-        messages=[
-            {
-                "role": "system",
-                "content": "你只负责新闻候选排序、重要性判断、新增/延续判断、摘要和来源绑定；不得联网、使用模型记忆、执行命令、读取文件或密钥。",
-            },
-            {"role": "user", "content": mapping_prompt},
-        ],
-        max_tokens=min(4800, search_max_tokens * 2),
-        timeout_seconds=timeout_seconds,
-        ledger=ledger,
-        search_enabled=False,
-    )
-    selected = SelectedCandidateBatch.model_validate(selected_payload)
     selection_quotas = {
         "全球金融": 5,
         "AI行业": 5,
         "半导体重点": semiconductor_target,
         "社媒趋势": 3,
     }
-    for category, expected in selection_quotas.items():
-        actual = sum(
-            item.category == category for item in selected.selections.values()
+    selection_error = ""
+    selected: SelectedCandidateBatch | None = None
+    for selection_attempt in range(2):
+        correction = (
+            "\n上一输出未通过代码数量校验："
+            f"{selection_error}。必须严格按每类配额和总数重新输出。"
+            if selection_error
+            else ""
         )
-        if actual != expected:
-            raise ValueError(
-                f"Source selection returned {actual} {category} candidates; expected {expected}"
+        selected_payload, _ = call_dashscope_json(
+            api_key=api_key,
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "你只负责新闻候选排序、重要性判断、新增/延续判断、摘要和来源绑定；不得联网、使用模型记忆、执行命令、读取文件或密钥。",
+                },
+                {"role": "user", "content": mapping_prompt + correction},
+            ],
+            max_tokens=min(4800, search_max_tokens * 2),
+            timeout_seconds=timeout_seconds,
+            ledger=ledger,
+            search_enabled=False,
+        )
+        try:
+            candidate_selection = SelectedCandidateBatch.model_validate(
+                selected_payload
             )
+            counts = {
+                category: sum(
+                    item.category == category
+                    for item in candidate_selection.selections.values()
+                )
+                for category in selection_quotas
+            }
+            errors = [
+                f"{category}={counts[category]}，应为{expected}"
+                for category, expected in selection_quotas.items()
+                if counts[category] != expected
+            ]
+            if len(candidate_selection.selections) != selection_total:
+                errors.append(
+                    f"总数={len(candidate_selection.selections)}，应为{selection_total}"
+                )
+            if not errors:
+                selected = candidate_selection
+                break
+            selection_error = "；".join(errors)
+        except Exception as exc:
+            selection_error = f"JSON Schema 不合格（{type(exc).__name__}）"
+        if selection_attempt == 0:
+            LOG.warning(
+                "Source selection quality failed (%s); retrying once",
+                selection_error,
+            )
+    if selected is None:
+        raise ValueError(
+            f"Source selection failed after one quality retry: {selection_error}"
+        )
 
     all_candidates: list[CandidateItem] = []
     for source_id, item in selected.selections.items():
@@ -1142,22 +1177,57 @@ def request_brief(
 
 再次强调：全球金融 5 条、AI 行业 5 条、半导体 {semiconductor_count} 条、社媒 2 条；source_url、source_name、published_at 必须原样继承候选。{semiconductor_limit_note}只返回 JSON 对象。
 """
-    payload, _response = call_dashscope_json(
-        api_key=api_key,
-        model=model,
-        messages=[
-            {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=final_max_tokens,
-        timeout_seconds=timeout_seconds,
-        ledger=ledger,
-        search_enabled=False,
-    )
-    brief = DailyBrief.model_validate(payload)
     candidate_urls = {normalize_url(item.source_url) for item in candidates}
     if not candidate_urls.issubset(search_urls):
         raise ValueError("Candidate source set is not a subset of DashScope search results")
+    candidate_by_url = {
+        normalize_url(item.source_url): item for item in candidates
+    }
+    synthesis_error = ""
+    brief: DailyBrief | None = None
+    for synthesis_attempt in range(2):
+        correction = (
+            "\n上一输出未通过代码验收："
+            f"{synthesis_error}。仅修正结构与候选字段继承，不得添加新事实。"
+            if synthesis_error
+            else ""
+        )
+        payload, _response = call_dashscope_json(
+            api_key=api_key,
+            model=model,
+            messages=[
+                {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt + correction},
+            ],
+            max_tokens=final_max_tokens,
+            timeout_seconds=timeout_seconds,
+            ledger=ledger,
+            search_enabled=False,
+        )
+        try:
+            candidate_brief = DailyBrief.model_validate(payload)
+            for _category, field_name in CATEGORY_FIELDS:
+                for news in getattr(candidate_brief, field_name):
+                    source = candidate_by_url.get(normalize_url(news.source_url))
+                    if source is None:
+                        raise ValueError("正文包含候选池之外的来源链接")
+                    if news.source_name != source.source_name:
+                        raise ValueError("正文来源名未原样继承候选")
+                    if news.published_at != source.published_at:
+                        raise ValueError("正文发布时间未原样继承候选")
+            brief = candidate_brief
+            break
+        except Exception as exc:
+            synthesis_error = f"{type(exc).__name__}: {str(exc)[:180]}"
+            if synthesis_attempt == 0:
+                LOG.warning(
+                    "Final synthesis quality failed (%s); retrying once",
+                    synthesis_error,
+                )
+    if brief is None:
+        raise ValueError(
+            f"Final synthesis failed after one quality retry: {synthesis_error}"
+        )
     return brief, candidate_urls, candidates
 
 
