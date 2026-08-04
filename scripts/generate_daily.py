@@ -606,17 +606,61 @@ def call_dashscope_json(
     raise RuntimeError("DashScope API failed after one retry") from last_error
 
 
-def search_result_urls(response: Any) -> set[str]:
+def search_result_records(response: Any) -> list[dict[str, Any]]:
     search_info = getattr(response.output, "search_info", None) or {}
     results = search_info.get("search_results", []) or []
-    urls = {
-        normalize_url(item.get("url", ""))
+    return [
+        item
         for item in results
         if isinstance(item, dict)
         and isinstance(item.get("url"), str)
         and item["url"].startswith(("https://", "http://"))
-    }
-    return urls
+    ]
+
+
+def resolve_candidate_source(
+    item: CandidateItem, search_results: list[dict[str, Any]]
+) -> bool:
+    source_urls = {normalize_url(result["url"]) for result in search_results}
+    if source_matches(item.source_url, source_urls):
+        return True
+
+    candidate_host = urlsplit(item.source_url).netloc.lower()
+    same_host = [
+        result
+        for result in search_results
+        if urlsplit(result["url"]).netloc.lower() == candidate_host
+    ]
+    matches = same_host
+    if not matches:
+        source_name = normalize_text(item.source_name)
+        if len(source_name) >= 2:
+            matches = [
+                result
+                for result in search_results
+                if source_name
+                in normalize_text(
+                    f"{result.get('site_name', '')} {urlsplit(result['url']).netloc}"
+                )
+                or normalize_text(str(result.get("site_name", ""))) in source_name
+            ]
+    if not matches:
+        return False
+
+    candidate_text = normalize_text(f"{item.headline} {item.what_happened}")
+    best = max(
+        matches,
+        key=lambda result: SequenceMatcher(
+            None,
+            candidate_text,
+            normalize_text(str(result.get("title", ""))),
+        ).ratio(),
+    )
+    item.source_url = best["url"]
+    site_name = str(best.get("site_name", "")).strip()
+    if site_name:
+        item.source_name = site_name[:60]
+    return True
 
 
 def collect_candidates(
@@ -665,7 +709,8 @@ def collect_candidates(
             search_enabled=True,
         )
         batch = CandidateBatch.model_validate(payload)
-        source_urls = search_result_urls(response)
+        search_results = search_result_records(response)
+        source_urls = {normalize_url(result["url"]) for result in search_results}
         if len(source_urls) < sum(plan["minimum"].values()):
             raise ValueError(
                 f"{plan['name']} search returned only {len(source_urls)} source URLs"
@@ -678,7 +723,7 @@ def collect_candidates(
         verified = [
             item
             for item in batch.candidates
-            if source_matches(item.source_url, source_urls)
+            if resolve_candidate_source(item, search_results)
         ]
         discarded = len(batch.candidates) - len(verified)
         if discarded:
