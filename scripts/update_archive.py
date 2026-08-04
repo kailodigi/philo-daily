@@ -166,7 +166,8 @@ def main() -> int:
     candidate = build_dir / f"{args.brief_date}.html"
     brief_path = build_dir / "brief.json"
     events_path = build_dir / "previous_events.json"
-    for required in (candidate, brief_path, events_path):
+    usage_path = build_dir / "usage.json"
+    for required in (candidate, brief_path, events_path, usage_path):
         if not required.exists() or required.stat().st_size == 0:
             raise FileNotFoundError(f"Missing generated artifact: {required}")
 
@@ -181,15 +182,17 @@ def main() -> int:
     staged_archive = atomic_write(root / "archive.html", render_archive(dates))
     staged_events = root / "data" / "previous_events.json.tmp"
     shutil.copyfile(events_path, staged_events)
+    staged_usage = root / "data" / "usage.json.tmp"
+    shutil.copyfile(usage_path, staged_usage)
 
     os.replace(staged_daily, root / f"{args.brief_date}.html")
     os.replace(staged_index, root / "index.html")
     os.replace(staged_archive, root / "archive.html")
     os.replace(staged_events, root / "data" / "previous_events.json")
+    os.replace(staged_usage, root / "data" / "usage.json")
     print(f"Promoted {args.brief_date} and refreshed index/archive at {datetime.now().isoformat(timespec='seconds')}")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
