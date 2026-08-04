@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 from openai import OpenAI
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 BEIJING = ZoneInfo("Asia/Shanghai")
@@ -36,10 +36,17 @@ class NewsItem(StrictModel):
     what_happened: str = Field(min_length=20, max_length=95)
     why_important: str = Field(min_length=20, max_length=95)
     source_name: str = Field(min_length=2, max_length=60)
-    source_url: HttpUrl
+    source_url: str = Field(min_length=12, max_length=2048)
     published_at: str = Field(min_length=10, max_length=48)
     confidence: Literal["高", "中", "低"]
     continuation_of: str | None
+
+    @field_validator("source_url")
+    @classmethod
+    def require_http_source(cls, value: str) -> str:
+        if not value.startswith(("https://", "http://")):
+            raise ValueError("source_url must be an absolute HTTP(S) URL")
+        return value
 
 
 class Signal(StrictModel):
