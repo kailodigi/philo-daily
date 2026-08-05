@@ -58,15 +58,6 @@ jobs:
           echo "BRIEF_DATE=$BRIEF_DATE" >> "$GITHUB_ENV"
           echo "brief_date=$BRIEF_DATE" >> "$GITHUB_OUTPUT"
 
-      - name: Check DashScope secret
-        env:
-          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
-        run: |
-          if [[ -z "$DASHSCOPE_API_KEY" ]]; then
-            echo "::error::Repository secret DASHSCOPE_API_KEY is not configured"
-            exit 2
-          fi
-
       - name: Generate candidate daily brief
         id: generate
         continue-on-error: true
@@ -78,17 +69,40 @@ jobs:
           DASHSCOPE_FINAL_MAX_TOKENS: "6000"
         run: python scripts/generate_daily.py --date "$BRIEF_DATE"
 
+      - name: Validate brief quality gate
+        id: quality
+        if: steps.generate.outcome == 'success'
+        continue-on-error: true
+        run: >-
+          python scripts/quality_gate.py
+          .build/brief.json
+          --date "$BRIEF_DATE"
+          --verified-sources .build/candidates.json
+
+      - name: Validate candidate daily HTML
+        id: candidate_html
+        if: steps.generate.outcome == 'success' && steps.quality.outcome == 'success'
+        continue-on-error: true
+        run: >-
+          python scripts/validate_html.py
+          ".build/$BRIEF_DATE.html"
+          --site-root .
+          --public-path "$BRIEF_DATE.html"
+
       - name: Record failed generation usage
-        if: steps.generate.outcome == 'failure'
+        if: steps.generate.outcome == 'failure' || steps.quality.outcome == 'failure' || steps.candidate_html.outcome == 'failure'
         run: |
           if [[ ! -s .build/usage.json ]]; then
             echo "::error::Generation failed before a usage snapshot was written"
             exit 1
           fi
-          cp .build/usage.json data/usage.json
+          python scripts/usage_status.py .build/usage.json --status failure
+          USAGE_PATH="data/usage/${BRIEF_DATE:0:7}.json"
+          mkdir -p data/usage
+          cp .build/usage.json "$USAGE_PATH"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/usage.json
+          git add "$USAGE_PATH"
           if git diff --cached --quiet; then
             echo "No failed-run usage changes to commit."
           else
@@ -97,32 +111,46 @@ jobs:
           fi
 
       - name: Stop after failed generation
-        if: steps.generate.outcome == 'failure'
+        if: steps.generate.outcome == 'failure' || steps.quality.outcome == 'failure' || steps.candidate_html.outcome == 'failure'
         run: |
           echo "::error::Daily generation failed; previous Pages site remains unchanged"
           exit 1
 
-      - name: Validate candidate daily HTML
-        run: >-
-          python scripts/validate_html.py
-          ".build/$BRIEF_DATE.html"
-          --site-root .
-          --public-path "$BRIEF_DATE.html"
+      - name: Promote daily, update indexes, and validate site
+        id: promote
+        continue-on-error: true
+        run: |
+          python scripts/update_archive.py --date "$BRIEF_DATE"
+          python scripts/validate_html.py "$BRIEF_DATE.html" index.html archive.html --site-root .
 
-      - name: Promote daily and update indexes
-        run: python scripts/update_archive.py --date "$BRIEF_DATE"
+      - name: Record failed promotion usage
+        if: steps.promote.outcome == 'failure'
+        run: |
+          python scripts/usage_status.py .build/usage.json --status failure
+          USAGE_PATH="data/usage/${BRIEF_DATE:0:7}.json"
+          mkdir -p data/usage
+          cp .build/usage.json "$USAGE_PATH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$USAGE_PATH"
+          if git diff --cached --quiet; then
+            echo "No failed-run usage changes to commit."
+          else
+            git commit -m "Record failed Philo Daily Brief usage $BRIEF_DATE"
+            git push origin HEAD:main
+          fi
 
-      - name: Validate promoted site
-        run: >-
-          python scripts/validate_html.py
-          "$BRIEF_DATE.html" index.html archive.html
-          --site-root .
+      - name: Stop after failed promotion
+        if: steps.promote.outcome == 'failure'
+        run: |
+          echo "::error::Promotion validation failed; previous Pages site remains unchanged"
+          exit 1
 
       - name: Commit generated artifacts
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$BRIEF_DATE.html" index.html archive.html data/previous_events.json data/usage.json
+          git add "$BRIEF_DATE.html" index.html archive.html data/previous_events.json "data/usage/${BRIEF_DATE:0:7}.json"
           if git diff --cached --quiet; then
             echo "No generated changes to commit."
           else
