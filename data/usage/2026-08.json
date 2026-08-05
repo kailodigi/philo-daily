@@ -9,8 +9,23 @@
     "cny_per_usd_estimate": 7.0,
     "monthly_budget_usd": 5.0
   },
-  "migration_note": "Legacy daily aggregates could not be split without inventing per-run token counts; known GitHub run IDs are preserved together.",
   "runs": [
+    {
+      "date": "2026-08-05",
+      "workflow_run_id": "31002863347",
+      "model": "qwen-plus",
+      "status": "failure",
+      "api_attempts": 4,
+      "successful_calls": 4,
+      "search_calls": 4,
+      "input_tokens": 23257,
+      "output_tokens": 5937,
+      "total_tokens": 29194,
+      "estimated_model_cost_cny": 0.03048,
+      "estimated_search_cost_cny": 0.2,
+      "estimated_total_cost_cny": 0.23048,
+      "estimated_total_cost_usd": 0.032926
+    },
     {
       "date": "2026-08-05",
       "workflow_run_id": "30993481602+30995037103",
@@ -46,5 +61,5 @@
       "legacy_aggregate": true
     }
   ],
-  "updated_at": "2026-08-05T17:53:04+08:00"
+  "updated_at": "2026-08-05T19:49:39+08:00"
 }
