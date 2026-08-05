@@ -20,13 +20,15 @@ Philo Daily Brief 是一个由 GitHub Actions 定时生成和发布的中文行�
 ├── .github/workflows/daily-brief.yml
 ├── scripts/
 │   ├── generate_daily.py
+│   ├── quality_gate.py
 │   ├── update_archive.py
+│   ├── usage_status.py
 │   └── validate_html.py
 ├── tests/test_generate_daily.py
 ├── templates/daily_v3.html
 ├── data/
 │   ├── previous_events.json
-│   └── usage.json
+│   └── usage/YYYY-MM.json
 ├── requirements.txt
 ├── index.html
 ├── archive.html
@@ -50,7 +52,7 @@ GitHub Pages 的 Build and deployment Source 需要设置为 **GitHub Actions**�
 python scripts/validate_html.py index.html archive.html --site-root .
 ```
 
-生成过程还会检查：当天 HTML 非空且可按 UTF-8 读取、HTML 结构完整、金融和 AI 各有 5 条、每条资讯包含状态/事实/重要性/来源/发布时间/可信度、无明显占位符，以及全部内部链接有效。
+HTML 生成前，独立质量门禁会检查金融和 AI 各至少 5 条、每条资讯包含状态/事实/重要性/来源/发布时间、来源链接属于已验证搜索候选，以及超过 48 小时的资讯必须标为“延续”。社媒只允许 3–5 条；可靠公开信号不足 3 条时不凑数，并显示“今日可靠社媒趋势不足”。随后再检查当天 HTML 非空、可按 UTF-8 读取、结构完整、无明显占位符，以及全部内部链接有效。
 
 ## 内容边界
 
@@ -60,7 +62,7 @@ Qwen 只处理候选排序、重要性判断、新增/延续判断、摘要与�
 
 ## 成本控制
 
-工作流先运行不联网单元测试，通过后才允许调用 API。系统默认每天 6 次成功模型调用（5 次搜索、1 次正文生成），单组搜索若返回的可信来源不足只允许再尝试一次，正文结构不合格也只允许重试一次，并限制候选与正文输出长度。`data/usage.json` 记录每日成功和失败生成次数、API 尝试、成功调用、搜索调用、输入/输出 Token 及人民币和美元费用估算；失败运行只提交用量快照，工作流随后以非零状态退出，不会部署或覆盖正常首页。月度估算达到 4.75 美元时会在调用前停止，以保留 5 美元预算余量。估算采用仓库记录的保守单价与固定汇率，阿里云实际账单和汇率可能不同，应以控制台为准。
+工作流先运行不联网单元测试，通过后才允许调用 API。系统默认每天 6 次成功模型调用（5 次搜索、1 次正文生成），单组搜索若返回的可信来源不足只允许再尝试一次，正文结构不合格也只允许重试一次，并限制候选与正文输出长度。`data/usage/YYYY-MM.json` 按 workflow run 记录日期、真实 run id、模型、成功/失败状态、输入/输出 Token 及人民币和美元费用估算；生成或后续质量检查失败时也只提交失败用量快照，随后以非零状态退出，不会部署或覆盖正常首页。月度估算达到 4.75 美元时会在调用前停止，以保留 5 美元预算余量。估算采用仓库记录的保守单价与固定汇率，阿里云实际账单和汇率可能不同，应以控制台为准。
 
 ## 安全边界
 
