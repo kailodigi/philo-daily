@@ -12,19 +12,19 @@
     {
       "date": "2026-08-05",
       "model": "qwen-plus",
-      "generation_count": 1,
+      "generation_count": 2,
       "successful_generations": 0,
-      "failed_generations": 1,
-      "api_attempts": 2,
-      "successful_calls": 2,
-      "search_calls": 2,
-      "input_tokens": 11884,
-      "output_tokens": 2694,
-      "total_tokens": 14578,
-      "estimated_model_cost_cny": 0.014895,
-      "estimated_search_cost_cny": 0.1,
-      "estimated_total_cost_cny": 0.114895,
-      "estimated_total_cost_usd": 0.016414
+      "failed_generations": 2,
+      "api_attempts": 4,
+      "successful_calls": 4,
+      "search_calls": 4,
+      "input_tokens": 23764,
+      "output_tokens": 5501,
+      "total_tokens": 29265,
+      "estimated_model_cost_cny": 0.030013,
+      "estimated_search_cost_cny": 0.2,
+      "estimated_total_cost_cny": 0.230013,
+      "estimated_total_cost_usd": 0.032859
     },
     {
       "date": "2026-08-04",
@@ -42,5 +42,5 @@
       "estimated_total_cost_usd": 0.027632
     }
   ],
-  "updated_at": "2026-08-05T17:30:34+08:00"
+  "updated_at": "2026-08-05T17:53:04+08:00"
 }
