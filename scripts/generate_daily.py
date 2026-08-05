@@ -77,22 +77,6 @@ class CandidateBatch(StrictModel):
     candidates: list[CandidateItem] = Field(min_length=4, max_length=12)
 
 
-class SelectedCandidateItem(StrictModel):
-    category: Literal["全球金融", "AI行业", "半导体重点", "社媒趋势"]
-    status_hint: Literal["新增", "延续"]
-    headline: str = Field(min_length=6, max_length=42)
-    what_happened: str = Field(min_length=20, max_length=110)
-    why_important: str = Field(min_length=20, max_length=110)
-    published_at: str = Field(min_length=10, max_length=48)
-    published_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
-    confidence: Literal["高", "中", "低"]
-    continuation_of: str | None
-
-
-class SelectedCandidateBatch(StrictModel):
-    selections: dict[str, SelectedCandidateItem] = Field(min_length=1, max_length=20)
-
-
 class Signal(StrictModel):
     label: str = Field(min_length=2, max_length=16)
     value: str = Field(min_length=2, max_length=36)
@@ -305,7 +289,9 @@ class UsageLedger:
             output_tokens,
         )
 
-    def as_record(self, brief_date: str, model: str) -> dict[str, Any]:
+    def as_record(
+        self, brief_date: str, model: str, *, succeeded: bool
+    ) -> dict[str, Any]:
         model_cost_cny = (
             self.input_tokens * MODEL_INPUT_CNY_PER_MILLION
             + self.output_tokens * MODEL_OUTPUT_CNY_PER_MILLION
@@ -316,6 +302,8 @@ class UsageLedger:
             "date": brief_date,
             "model": model,
             "generation_count": 1,
+            "successful_generations": int(succeeded),
+            "failed_generations": int(not succeeded),
             "api_attempts": self.api_attempts,
             "successful_calls": self.successful_calls,
             "search_calls": self.search_calls,
@@ -367,13 +355,20 @@ def enforce_monthly_budget(history: dict[str, Any], brief_date: str) -> None:
 
 
 def update_usage_history(
-    history: dict[str, Any], brief_date: str, model: str, ledger: UsageLedger
+    history: dict[str, Any],
+    brief_date: str,
+    model: str,
+    ledger: UsageLedger,
+    *,
+    succeeded: bool,
 ) -> dict[str, Any]:
-    record = ledger.as_record(brief_date, model)
+    record = ledger.as_record(brief_date, model, succeeded=succeeded)
     days = []
     merged = False
     additive_fields = (
         "generation_count",
+        "successful_generations",
+        "failed_generations",
         "api_attempts",
         "successful_calls",
         "search_calls",
@@ -394,6 +389,8 @@ def update_usage_history(
             combined[field] = round(float(item.get(field, 0)) + float(record.get(field, 0)), 6)
         for field in (
             "generation_count",
+            "successful_generations",
+            "failed_generations",
             "api_attempts",
             "successful_calls",
             "search_calls",
@@ -828,9 +825,9 @@ def collect_candidates(
     ledger: UsageLedger,
 ) -> tuple[list[CandidateItem], set[str]]:
     compact_history = json.dumps(history["events"], ensure_ascii=False, separators=(",", ":"))
-    draft_batches: list[dict[str, Any]] = []
-    source_catalog: dict[str, dict[str, Any]] = {}
+    plan_pools: dict[str, list[CandidateItem]] = {}
     all_source_urls: set[str] = set()
+    brief_day = date.fromisoformat(brief_date)
 
     for plan in SEARCH_PLANS:
         categories = "、".join(plan["categories"])
@@ -914,17 +911,44 @@ def collect_candidates(
                     plan["name"],
                     ", ".join(untrusted_domains),
                 )
-            source_urls = {
-                normalize_url(result["url"]) for result in search_results
-            }
             invalid_categories = [
                 item.category
                 for item in batch.candidates
                 if item.category not in plan["categories"]
             ]
+            bound_candidates: list[CandidateItem] = []
+            for item in batch.candidates:
+                if item.category not in plan["categories"]:
+                    continue
+                if not resolve_candidate_source(item, search_results):
+                    LOG.warning(
+                        "Dropping candidate without a verified search source: %s",
+                        item.headline,
+                    )
+                    continue
+                matched_result = next(
+                    (
+                        result
+                        for result in search_results
+                        if normalize_url(result["url"])
+                        == normalize_url(item.source_url)
+                    ),
+                    None,
+                )
+                if matched_result is None:
+                    continue
+                source_date = source_date_from_result(matched_result)
+                if source_date:
+                    item.published_date = source_date
+                    item.published_at = source_date
+                bound_candidates.append(item)
             eligible_drafts = filter_candidate_recency(
-                batch.candidates, date.fromisoformat(brief_date), history
+                bound_candidates, brief_day, history
             )
+            eligible_drafts = deduplicate_ranked_candidates(eligible_drafts)
+            source_urls = {
+                normalize_url(result["url"]) for result in search_results
+            }
             quality_errors: list[str] = []
             required_sources = sum(plan["minimum"].values())
             if len(source_urls) < required_sources:
@@ -952,159 +976,19 @@ def collect_candidates(
                 )
         else:
             raise ValueError(f"{plan['name']} search quality failed: {quality_error}")
-        prefix = plan["prefix"]
-        for fallback_index, result in enumerate(search_results, start=1):
-            result_index = str(result.get("index", fallback_index)).strip() or str(
-                fallback_index
-            )
-            source_id = f"{prefix}{result_index}"
-            if source_id in source_catalog:
-                source_id = f"{prefix}{fallback_index}"
-            source_catalog[source_id] = {
-                "source_id": source_id,
-                "category_scope": list(plan["categories"]),
-                "title": str(result.get("title", ""))[:220],
-                "site_name": str(result.get("site_name", ""))[:80],
-                "url": result["url"],
-                "source_date": source_date_from_result(result),
-            }
-        draft_batches.append(
-            {
-                "plan": plan["name"],
-                "candidates": [
-                    item.model_dump(mode="json") for item in eligible_drafts
-                ],
-            }
-        )
+        plan_pools[plan["prefix"]] = eligible_drafts
         all_source_urls.update(source_urls)
 
-    available_semiconductors = sum(
-        item.get("category") == "半导体重点"
-        for batch in draft_batches
-        for item in batch["candidates"]
-    )
-    semiconductor_target = min(3, available_semiconductors)
-    if semiconductor_target < 2:
-        raise ValueError("Fewer than 2 timely semiconductor candidates are available")
-    selection_total = 13 + semiconductor_target
+    return select_ranked_candidates(plan_pools), all_source_urls
 
-    mapping_prompt = f"""今天是 {brief_date}（北京时间）。把联网检索生成的候选与代码提供的真实来源目录进行语义匹配、排序和去重。
 
-过去 7 天事件：{compact_history}
-候选草稿：{json.dumps(draft_batches, ensure_ascii=False, separators=(',', ':'))}
-真实来源目录：{json.dumps(list(source_catalog.values()), ensure_ascii=False, separators=(',', ':'))}
-
-输出 JSON Schema：
-{json.dumps(SelectedCandidateBatch.model_json_schema(), ensure_ascii=False, separators=(',', ':'))}
-
-硬性要求：
-- 恰好选择 {selection_total} 条：全球金融 5、AI行业 5、半导体重点 {semiconductor_target}、社媒趋势 3。社媒多选 1 条作为时效和事件去重校验的备用候选。
-- selections 必须是以真实 source_id 为键的 JSON 对象，恰好包含 {selection_total} 个不同键；每个键必须逐字来自真实来源目录；不要输出 URL 或来源名。
-- 只在候选事实与来源标题语义对应时绑定；无法可靠对应的候选不得采用。
-- 真实来源目录提供 source_date 时，published_date 和 published_at 的日期必须与 source_date 一致。
-- 同一事件即使来源不同也只能选择一次；半导体 {semiconductor_target} 条和社媒 3 条必须分别描述不同事件，不能用同一发布或同一公司动作拆成多条。
-- 优先过去 24 小时；超过 48 小时只能标为“延续”且 continuation_of 必须对应过去 7 天事件。
-- 不增加候选草稿之外的事件、数字或热度；社媒量化不足时明确限制。
-- 只返回 JSON 对象。
-"""
-    selection_quotas = {
-        "全球金融": 5,
-        "AI行业": 5,
-        "半导体重点": semiconductor_target,
-        "社媒趋势": 3,
-    }
-    selection_error = ""
-    selected: SelectedCandidateBatch | None = None
-    for selection_attempt in range(2):
-        correction = (
-            "\n上一输出未通过代码数量校验："
-            f"{selection_error}。必须严格按每类配额和总数重新输出。"
-            if selection_error
-            else ""
-        )
-        selected_payload, _ = call_dashscope_json(
-            api_key=api_key,
-            model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "你只负责新闻候选排序、重要性判断、新增/延续判断、摘要和来源绑定；不得联网、使用模型记忆、执行命令、读取文件或密钥。",
-                },
-                {"role": "user", "content": mapping_prompt + correction},
-            ],
-            max_tokens=min(4800, search_max_tokens * 2),
-            timeout_seconds=timeout_seconds,
-            ledger=ledger,
-            search_enabled=False,
-        )
-        try:
-            candidate_selection = SelectedCandidateBatch.model_validate(
-                selected_payload
-            )
-            counts = {
-                category: sum(
-                    item.category == category
-                    for item in candidate_selection.selections.values()
-                )
-                for category in selection_quotas
-            }
-            errors = [
-                f"{category}={counts[category]}，应为{expected}"
-                for category, expected in selection_quotas.items()
-                if counts[category] != expected
-            ]
-            if len(candidate_selection.selections) != selection_total:
-                errors.append(
-                    f"总数={len(candidate_selection.selections)}，应为{selection_total}"
-                )
-            if not errors:
-                selected = candidate_selection
-                break
-            selection_error = "；".join(errors)
-        except Exception as exc:
-            selection_error = f"JSON Schema 不合格（{type(exc).__name__}）"
-        if selection_attempt == 0:
-            LOG.warning(
-                "Source selection quality failed (%s); retrying once",
-                selection_error,
-            )
-    if selected is None:
-        raise ValueError(
-            f"Source selection failed after one quality retry: {selection_error}"
-        )
-
-    all_candidates: list[CandidateItem] = []
-    for source_id, item in selected.selections.items():
-        if not re.fullmatch(r"[MFAST]\d+", source_id):
-            raise ValueError(f"Invalid source_id returned by Qwen: {source_id}")
-        source = source_catalog.get(source_id)
-        if source is None:
-            raise ValueError(f"Unknown source_id returned by Qwen: {source_id}")
-        if item.category not in source["category_scope"]:
-            raise ValueError(
-                f"Source {source_id} is outside the {item.category} search scope"
-            )
-        source_number = int(re.search(r"\d+", source_id).group())
-        selected_data = item.model_dump()
-        if source["source_date"]:
-            selected_data["published_date"] = source["source_date"]
-            selected_data["published_at"] = source["source_date"]
-        all_candidates.append(
-            CandidateItem(
-                **selected_data,
-                source_index=source_number,
-                source_name=(source["site_name"] or urlsplit(source["url"]).netloc)[:60],
-                source_url=source["url"],
-            )
-        )
-
-    all_candidates = filter_candidate_recency(
-        all_candidates, date.fromisoformat(brief_date), history
-    )
+def deduplicate_ranked_candidates(
+    candidates: list[CandidateItem],
+) -> list[CandidateItem]:
     unique: list[CandidateItem] = []
     seen_urls: set[str] = set()
     seen_titles: list[str] = []
-    for item in all_candidates:
+    for item in candidates:
         normalized_url = normalize_url(item.source_url)
         normalized_title = normalize_text(item.headline)
         if normalized_url in seen_urls:
@@ -1114,18 +998,55 @@ def collect_candidates(
         unique.append(item)
         seen_urls.add(normalized_url)
         seen_titles.append(normalized_title)
+    return unique
 
-    required = {
-        "全球金融": 5,
-        "AI行业": 5,
-        "半导体重点": semiconductor_target,
-        "社媒趋势": 2,
-    }
-    for category, minimum in required.items():
-        count = sum(item.category == category for item in unique)
-        if count < minimum:
-            raise ValueError(f"Only {count} unique {category} candidates remain; need {minimum}")
-    return unique, all_source_urls
+
+def select_ranked_candidates(
+    plan_pools: dict[str, list[CandidateItem]],
+) -> list[CandidateItem]:
+    """Apply deterministic quotas to Qwen-ranked, source-verified pools."""
+    selected: list[CandidateItem] = []
+    seen_urls: set[str] = set()
+    seen_titles: list[str] = []
+
+    def add_ranked(pool: list[CandidateItem], target_total: int) -> None:
+        for item in pool:
+            if len(selected) >= target_total:
+                return
+            normalized_url = normalize_url(item.source_url)
+            normalized_title = normalize_text(item.headline)
+            if normalized_url in seen_urls:
+                continue
+            if any(
+                SequenceMatcher(None, normalized_title, old).ratio() >= 0.82
+                for old in seen_titles
+            ):
+                continue
+            selected.append(item)
+            seen_urls.add(normalized_url)
+            seen_titles.append(normalized_title)
+
+    add_ranked(plan_pools.get("M", []), 3)
+    add_ranked(plan_pools.get("F", []), 5)
+    if len(selected) < 5:
+        add_ranked(plan_pools.get("M", []) + plan_pools.get("F", []), 5)
+    if len(selected) != 5:
+        raise ValueError("Fewer than 5 unique global finance candidates remain")
+
+    add_ranked(plan_pools.get("A", []), 10)
+    if len(selected) != 10:
+        raise ValueError("Fewer than 5 unique AI candidates remain")
+
+    before_semiconductors = len(selected)
+    add_ranked(plan_pools.get("S", []), before_semiconductors + 3)
+    if len(selected) - before_semiconductors < 2:
+        raise ValueError("Fewer than 2 unique semiconductor candidates remain")
+
+    before_social = len(selected)
+    add_ranked(plan_pools.get("T", []), before_social + 2)
+    if len(selected) - before_social != 2:
+        raise ValueError("Fewer than 2 unique social candidates remain")
+    return selected
 
 
 def request_brief(
@@ -1206,6 +1127,18 @@ def request_brief(
         )
         try:
             candidate_brief = DailyBrief.model_validate(payload)
+            expected_counts = {
+                "global_finance": 5,
+                "ai_industry": 5,
+                "semiconductors": semiconductor_count,
+                "social_trends": 2,
+            }
+            for field_name, expected in expected_counts.items():
+                actual = len(getattr(candidate_brief, field_name))
+                if actual != expected:
+                    raise ValueError(
+                        f"正文 {field_name} 条目数为 {actual}，应为 {expected}"
+                    )
             for _category, field_name in CATEGORY_FIELDS:
                 for news in getattr(candidate_brief, field_name):
                     source = candidate_by_url.get(normalize_url(news.source_url))
@@ -1259,73 +1192,121 @@ def main() -> int:
     ledger = UsageLedger()
     model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus")
     candidates: list[CandidateItem] = []
+    live_run = args.input_json is None
 
-    if args.input_json:
-        LOG.info("Loading local test fixture; DashScope API is bypassed")
-        brief = DailyBrief.model_validate_json(args.input_json.read_text(encoding="utf-8"))
-        response_urls = {normalize_url(str(item.source_url)) for _, item in iter_news(brief)}
-    else:
-        base_http_api_url = os.environ.get("DASHSCOPE_BASE_HTTP_API_URL", "").strip()
-        if base_http_api_url:
-            parsed_base_url = urlsplit(base_http_api_url)
-            if (
-                parsed_base_url.scheme != "https"
-                or not parsed_base_url.hostname
-                or not parsed_base_url.hostname.endswith(".aliyuncs.com")
-                or parsed_base_url.path.rstrip("/") != "/api/v1"
-            ):
-                raise ValueError(
-                    "DASHSCOPE_BASE_HTTP_API_URL must be an HTTPS Alibaba Cloud "
-                    "Model Studio /api/v1 endpoint"
-                )
-            dashscope.base_http_api_url = base_http_api_url.rstrip("/")
-        timeout_seconds = int(os.environ.get("DASHSCOPE_TIMEOUT_SECONDS", "120"))
-        search_max_tokens = int(os.environ.get("DASHSCOPE_SEARCH_MAX_TOKENS", "2400"))
-        final_max_tokens = int(os.environ.get("DASHSCOPE_FINAL_MAX_TOKENS", "6000"))
-        brief, response_urls, candidates = request_brief(
-            brief_date,
-            history,
-            model,
-            timeout_seconds,
-            search_max_tokens,
-            final_max_tokens,
-            ledger,
-        )
-
-    if brief.date != brief_date:
-        raise ValueError(f"Brief date mismatch: requested {brief_date}, received {brief.date}")
-    lock_verified_source_fields(brief, candidates)
-    classify_and_deduplicate(brief, history)
-    validate_sources(brief, response_urls)
-    validate_final_recency(brief, parsed_date)
-    updated_history = update_history(brief, history)
-    updated_usage = update_usage_history(usage_history, brief_date, model, ledger)
-    html = render_html(root, brief)
-
-    atomic_write(output_dir / f"{brief_date}.html", html)
-    atomic_write(
-        output_dir / "brief.json",
-        json.dumps(brief.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
-    )
-    atomic_write(
-        output_dir / "previous_events.json",
-        json.dumps(updated_history, ensure_ascii=False, indent=2) + "\n",
-    )
-    atomic_write(
-        output_dir / "usage.json",
-        json.dumps(updated_usage, ensure_ascii=False, indent=2) + "\n",
-    )
-    if candidates:
-        atomic_write(
-            output_dir / "candidates.json",
-            json.dumps(
-                [item.model_dump(mode="json") for item in candidates],
-                ensure_ascii=False,
-                indent=2,
+    try:
+        if args.input_json:
+            LOG.info("Loading local test fixture; DashScope API is bypassed")
+            brief = DailyBrief.model_validate_json(
+                args.input_json.read_text(encoding="utf-8")
             )
+            response_urls = {
+                normalize_url(str(item.source_url)) for _, item in iter_news(brief)
+            }
+        else:
+            base_http_api_url = os.environ.get(
+                "DASHSCOPE_BASE_HTTP_API_URL", ""
+            ).strip()
+            if base_http_api_url:
+                parsed_base_url = urlsplit(base_http_api_url)
+                if (
+                    parsed_base_url.scheme != "https"
+                    or not parsed_base_url.hostname
+                    or not parsed_base_url.hostname.endswith(".aliyuncs.com")
+                    or parsed_base_url.path.rstrip("/") != "/api/v1"
+                ):
+                    raise ValueError(
+                        "DASHSCOPE_BASE_HTTP_API_URL must be an HTTPS Alibaba Cloud "
+                        "Model Studio /api/v1 endpoint"
+                    )
+                dashscope.base_http_api_url = base_http_api_url.rstrip("/")
+            timeout_seconds = int(
+                os.environ.get("DASHSCOPE_TIMEOUT_SECONDS", "120")
+            )
+            search_max_tokens = int(
+                os.environ.get("DASHSCOPE_SEARCH_MAX_TOKENS", "2400")
+            )
+            final_max_tokens = int(
+                os.environ.get("DASHSCOPE_FINAL_MAX_TOKENS", "6000")
+            )
+            brief, response_urls, candidates = request_brief(
+                brief_date,
+                history,
+                model,
+                timeout_seconds,
+                search_max_tokens,
+                final_max_tokens,
+                ledger,
+            )
+
+        if brief.date != brief_date:
+            raise ValueError(
+                f"Brief date mismatch: requested {brief_date}, received {brief.date}"
+            )
+        lock_verified_source_fields(brief, candidates)
+        classify_and_deduplicate(brief, history)
+        validate_sources(brief, response_urls)
+        validate_final_recency(brief, parsed_date)
+        updated_history = update_history(brief, history)
+        updated_usage = update_usage_history(
+            usage_history,
+            brief_date,
+            model,
+            ledger,
+            succeeded=True,
+        )
+        html = render_html(root, brief)
+
+        atomic_write(output_dir / f"{brief_date}.html", html)
+        atomic_write(
+            output_dir / "brief.json",
+            json.dumps(brief.model_dump(mode="json"), ensure_ascii=False, indent=2)
             + "\n",
         )
-    usage = ledger.as_record(brief_date, model)
+        atomic_write(
+            output_dir / "previous_events.json",
+            json.dumps(updated_history, ensure_ascii=False, indent=2) + "\n",
+        )
+        atomic_write(
+            output_dir / "usage.json",
+            json.dumps(updated_usage, ensure_ascii=False, indent=2) + "\n",
+        )
+        if candidates:
+            atomic_write(
+                output_dir / "candidates.json",
+                json.dumps(
+                    [item.model_dump(mode="json") for item in candidates],
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+            )
+    except Exception:
+        if live_run:
+            failed_usage = update_usage_history(
+                usage_history,
+                brief_date,
+                model,
+                ledger,
+                succeeded=False,
+            )
+            atomic_write(
+                output_dir / "usage.json",
+                json.dumps(failed_usage, ensure_ascii=False, indent=2) + "\n",
+            )
+            failed_record = ledger.as_record(
+                brief_date, model, succeeded=False
+            )
+            LOG.error(
+                "Failed generation usage saved: calls=%d search_calls=%d total_tokens=%d estimated_usd=%.4f",
+                failed_record["successful_calls"],
+                failed_record["search_calls"],
+                failed_record["total_tokens"],
+                failed_record["estimated_total_cost_usd"],
+            )
+        raise
+
+    usage = ledger.as_record(brief_date, model, succeeded=True)
     LOG.info(
         "DashScope usage: successful_calls=%d search_calls=%d input_tokens=%d output_tokens=%d estimated_usd=%.4f",
         usage["successful_calls"],
