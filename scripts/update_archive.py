@@ -182,14 +182,17 @@ def main() -> int:
     staged_archive = atomic_write(root / "archive.html", render_archive(dates))
     staged_events = root / "data" / "previous_events.json.tmp"
     shutil.copyfile(events_path, staged_events)
-    staged_usage = root / "data" / "usage.json.tmp"
+    usage_month = args.brief_date[:7]
+    monthly_usage = root / "data" / "usage" / f"{usage_month}.json"
+    monthly_usage.parent.mkdir(parents=True, exist_ok=True)
+    staged_usage = monthly_usage.with_suffix(".json.tmp")
     shutil.copyfile(usage_path, staged_usage)
 
     os.replace(staged_daily, root / f"{args.brief_date}.html")
     os.replace(staged_index, root / "index.html")
     os.replace(staged_archive, root / "archive.html")
     os.replace(staged_events, root / "data" / "previous_events.json")
-    os.replace(staged_usage, root / "data" / "usage.json")
+    os.replace(staged_usage, monthly_usage)
     print(f"Promoted {args.brief_date} and refreshed index/archive at {datetime.now().isoformat(timespec='seconds')}")
     return 0
 

@@ -28,6 +28,7 @@ REQUIRED_DAILY_SECTIONS = {
     "tomorrow",
     "tracking",
 }
+SOCIAL_SHORTFALL_NOTICE = "今日可靠社媒趋势不足"
 
 
 def parse_args() -> argparse.Namespace:
@@ -90,6 +91,16 @@ def check_daily(soup: BeautifulSoup) -> list[str]:
         errors.append(f"expected 5 finance items, found {len(finance)}")
     if len(ai_items) != 5:
         errors.append(f"expected 5 AI items, found {len(ai_items)}")
+    social_items = soup.select('[data-section="social"] [data-news-item]')
+    social_notice = soup.select_one('[data-section="social"] .section-notice')
+    if len(social_items) > 5:
+        errors.append(f"expected at most 5 social items, found {len(social_items)}")
+    elif len(social_items) < 3:
+        notice_text = social_notice.get_text(" ", strip=True) if social_notice else ""
+        if notice_text != SOCIAL_SHORTFALL_NOTICE:
+            errors.append("fewer than 3 social items requires the reliability notice")
+    elif social_notice:
+        errors.append("unexpected social reliability notice with 3–5 items")
 
     news_items = soup.select("[data-news-item]")
     for index, item in enumerate(news_items, start=1):

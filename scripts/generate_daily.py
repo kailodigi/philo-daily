@@ -21,7 +21,12 @@ from zoneinfo import ZoneInfo
 import dashscope
 from dashscope import Generation
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+try:
+    from quality_gate import SOCIAL_SHORTFALL_NOTICE, assert_brief_quality
+except ModuleNotFoundError:  # Imported as scripts.generate_daily by offline tests.
+    from scripts.quality_gate import SOCIAL_SHORTFALL_NOTICE, assert_brief_quality
 
 
 BEIJING = ZoneInfo("Asia/Shanghai")
@@ -112,13 +117,25 @@ class DailyBrief(StrictModel):
     global_finance: list[NewsItem] = Field(min_length=5, max_length=5)
     ai_industry: list[NewsItem] = Field(min_length=5, max_length=5)
     semiconductors: list[NewsItem] = Field(min_length=2, max_length=3)
-    social_trends: list[NewsItem] = Field(min_length=2, max_length=2)
+    social_trends: list[NewsItem] = Field(default_factory=list, max_length=5)
+    social_limit_notice: str | None = Field(default=None, max_length=40)
     philo_insight: str = Field(min_length=80, max_length=420)
     tomorrow_watch: list[WatchItem] = Field(min_length=4, max_length=5)
     tracking_impacts: list[ImpactItem] = Field(min_length=3, max_length=5)
     data_limitations: list[Annotated[str, Field(min_length=12, max_length=120)]] = Field(
         min_length=1, max_length=4
     )
+
+    @model_validator(mode="after")
+    def require_social_shortfall_notice(self) -> "DailyBrief":
+        count = len(self.social_trends)
+        if count < 3 and self.social_limit_notice != SOCIAL_SHORTFALL_NOTICE:
+            raise ValueError(
+                f"fewer than 3 social items requires: {SOCIAL_SHORTFALL_NOTICE}"
+            )
+        if 3 <= count <= 5 and self.social_limit_notice not in (None, ""):
+            raise ValueError("social_limit_notice must be empty when 3–5 items exist")
+        return self
 
 
 CATEGORY_FIELDS = (
@@ -152,7 +169,7 @@ SYNTHESIS_SYSTEM_PROMPT = """你是 Philo Daily Brief V3 的中文研究编辑�
 
 硬性规则：
 1. 不联网，不使用模型记忆补充事实，不新增输入候选之外的来源、数字或事件。
-2. 全球金融与 AI 行业各恰好 5 条；半导体按已验证候选供给输出 2–3 条；社媒趋势恰好 2 条。
+2. 全球金融与 AI 行业各恰好 5 条；半导体按已验证候选供给输出 2–3 条；社媒趋势只使用可靠候选，最多 5 条。少于 3 条时不得凑数，social_limit_notice 必须逐字填写“今日可靠社媒趋势不足”。
 3. 每条资讯保留 status、发生了什么、为什么重要、来源、发布时间、可信度和可点击链接。
 4. 同一事件不得跨栏目重复；标题与正文紧凑，全文适合 5 分钟阅读。
 5. 社媒没有可靠量化数据时，明确说明限制；不得编造小红书、抖音或任何平台热度。
@@ -236,7 +253,7 @@ SEARCH_PLANS = (
         "name": "社媒趋势",
         "prefix": "T",
         "categories": ("社媒趋势",),
-        "minimum": {"社媒趋势": 2},
+        "minimum": {"社媒趋势": 0},
         "limit": 6,
         "focus": "社交平台政策、内容分发、创作者生态、AI内容治理与可信社媒行业趋势",
         "priority": "平台官方公告优先，其次 Reuters、Bloomberg、FT 与可靠社媒行业媒体",
@@ -290,7 +307,12 @@ class UsageLedger:
         )
 
     def as_record(
-        self, brief_date: str, model: str, *, succeeded: bool
+        self,
+        brief_date: str,
+        model: str,
+        *,
+        succeeded: bool,
+        workflow_run_id: str,
     ) -> dict[str, Any]:
         model_cost_cny = (
             self.input_tokens * MODEL_INPUT_CNY_PER_MILLION
@@ -300,10 +322,9 @@ class UsageLedger:
         total_cny = model_cost_cny + search_cost_cny
         return {
             "date": brief_date,
+            "workflow_run_id": workflow_run_id,
             "model": model,
-            "generation_count": 1,
-            "successful_generations": int(succeeded),
-            "failed_generations": int(not succeeded),
+            "status": "success" if succeeded else "failure",
             "api_attempts": self.api_attempts,
             "successful_calls": self.successful_calls,
             "search_calls": self.search_calls,
@@ -317,9 +338,10 @@ class UsageLedger:
         }
 
 
-def empty_usage_history() -> dict[str, Any]:
+def empty_usage_history(month: str = "") -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "month": month,
         "pricing_note": "Conservative estimate; actual Alibaba Cloud billing and FX may differ.",
         "pricing_assumptions": {
             "qwen_plus_input_cny_per_million_tokens": MODEL_INPUT_CNY_PER_MILLION,
@@ -328,16 +350,16 @@ def empty_usage_history() -> dict[str, Any]:
             "cny_per_usd_estimate": CNY_PER_USD_ESTIMATE,
             "monthly_budget_usd": MONTHLY_BUDGET_USD,
         },
-        "days": [],
+        "runs": [],
     }
 
 
-def load_usage_history(path: Path) -> dict[str, Any]:
+def load_usage_history(path: Path, month: str) -> dict[str, Any]:
     if not path.exists():
-        return empty_usage_history()
+        return empty_usage_history(month)
     data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data.get("days"), list):
-        raise ValueError("data/usage.json has an invalid days field")
+    if data.get("month") != month or not isinstance(data.get("runs"), list):
+        raise ValueError(f"{path} is not a valid usage file for {month}")
     return data
 
 
@@ -345,7 +367,7 @@ def enforce_monthly_budget(history: dict[str, Any], brief_date: str) -> None:
     month = brief_date[:7]
     spent = sum(
         float(item.get("estimated_total_cost_usd", 0))
-        for item in history.get("days", [])
+        for item in history.get("runs", [])
         if item.get("date", "")[:7] == month
     )
     if spent >= MONTHLY_STOP_USD:
@@ -361,53 +383,27 @@ def update_usage_history(
     ledger: UsageLedger,
     *,
     succeeded: bool,
+    workflow_run_id: str,
 ) -> dict[str, Any]:
-    record = ledger.as_record(brief_date, model, succeeded=succeeded)
-    days = []
-    merged = False
-    additive_fields = (
-        "generation_count",
-        "successful_generations",
-        "failed_generations",
-        "api_attempts",
-        "successful_calls",
-        "search_calls",
-        "input_tokens",
-        "output_tokens",
-        "total_tokens",
-        "estimated_model_cost_cny",
-        "estimated_search_cost_cny",
-        "estimated_total_cost_cny",
-        "estimated_total_cost_usd",
+    record = ledger.as_record(
+        brief_date,
+        model,
+        succeeded=succeeded,
+        workflow_run_id=workflow_run_id,
     )
-    for item in history.get("days", []):
-        if item.get("date") != brief_date:
-            days.append(item)
-            continue
-        combined = dict(item)
-        for field in additive_fields:
-            combined[field] = round(float(item.get(field, 0)) + float(record.get(field, 0)), 6)
-        for field in (
-            "generation_count",
-            "successful_generations",
-            "failed_generations",
-            "api_attempts",
-            "successful_calls",
-            "search_calls",
-            "input_tokens",
-            "output_tokens",
-            "total_tokens",
-        ):
-            combined[field] = int(combined[field])
-        combined["model"] = model
-        days.append(combined)
-        merged = True
-    if not merged:
-        days.append(record)
-    days.sort(key=lambda item: item["date"], reverse=True)
-    updated = empty_usage_history()
+    runs = [
+        item
+        for item in history.get("runs", [])
+        if str(item.get("workflow_run_id")) != workflow_run_id
+    ]
+    runs.append(record)
+    runs.sort(
+        key=lambda item: (str(item.get("date", "")), str(item.get("workflow_run_id", ""))),
+        reverse=True,
+    )
+    updated = empty_usage_history(brief_date[:7])
     updated["updated_at"] = datetime.now(BEIJING).isoformat(timespec="seconds")
-    updated["days"] = days[:400]
+    updated["runs"] = runs[:400]
     return updated
 
 
@@ -1063,9 +1059,7 @@ def select_ranked_candidates(
         raise ValueError("Fewer than 2 unique semiconductor candidates remain")
 
     before_social = len(selected)
-    add_ranked(plan_pools.get("T", []), before_social + 2)
-    if len(selected) - before_social != 2:
-        raise ValueError("Fewer than 2 unique social candidates remain")
+    add_ranked(plan_pools.get("T", []), before_social + 5)
     return selected
 
 
@@ -1099,6 +1093,7 @@ def request_brief(
     semiconductor_count = sum(
         item.category == "半导体重点" for item in candidates
     )
+    social_count = sum(item.category == "社媒趋势" for item in candidates)
     semiconductor_limit_note = (
         "当天仅有 2 条半导体候选满足时效与来源校验，data_limitations 必须明确说明此限制。"
         if semiconductor_count == 2
@@ -1116,7 +1111,7 @@ def request_brief(
 输出 JSON Schema：
 {json.dumps(DailyBrief.model_json_schema(), ensure_ascii=False, separators=(',', ':'))}
 
-再次强调：全球金融 5 条、AI 行业 5 条、半导体 {semiconductor_count} 条、社媒 2 条；source_url、source_name、published_at 必须原样继承候选。{semiconductor_limit_note}只返回 JSON 对象。
+再次强调：全球金融 5 条、AI 行业 5 条、半导体 {semiconductor_count} 条、社媒 {social_count} 条；社媒候选少于 3 条时不得补写，social_limit_notice 必须逐字填写“{SOCIAL_SHORTFALL_NOTICE}”。source_url、source_name、published_at 必须原样继承候选。{semiconductor_limit_note}只返回 JSON 对象。
 """
     candidate_urls = {normalize_url(item.source_url) for item in candidates}
     if not candidate_urls.issubset(search_urls):
@@ -1151,7 +1146,7 @@ def request_brief(
                 "global_finance": 5,
                 "ai_industry": 5,
                 "semiconductors": semiconductor_count,
-                "social_trends": 2,
+                "social_trends": social_count,
             }
             for field_name, expected in expected_counts.items():
                 actual = len(getattr(candidate_brief, field_name))
@@ -1206,16 +1201,24 @@ def main() -> int:
     root = (args.root or Path(__file__).resolve().parents[1]).resolve()
     output_dir = (args.output_dir or root / ".build").resolve()
     brief_date = args.brief_date or datetime.now(BEIJING).date().isoformat()
-    parsed_date = date.fromisoformat(brief_date)
-    history = load_history(root / "data" / "previous_events.json", parsed_date)
-    usage_history = load_usage_history(root / "data" / "usage.json")
-    enforce_monthly_budget(usage_history, brief_date)
+    usage_month = brief_date[:7]
     ledger = UsageLedger()
     model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus")
+    workflow_run_id = os.environ.get("GITHUB_RUN_ID") or (
+        "local-" + datetime.now(BEIJING).strftime("%Y%m%dT%H%M%S%z")
+    )
     candidates: list[CandidateItem] = []
     live_run = args.input_json is None
+    usage_history = empty_usage_history(usage_month)
 
     try:
+        parsed_date = date.fromisoformat(brief_date)
+        history = load_history(root / "data" / "previous_events.json", parsed_date)
+        usage_history = load_usage_history(
+            root / "data" / "usage" / f"{usage_month}.json",
+            usage_month,
+        )
+        enforce_monthly_budget(usage_history, brief_date)
         if args.input_json:
             LOG.info("Loading local test fixture; DashScope API is bypassed")
             brief = DailyBrief.model_validate_json(
@@ -1268,6 +1271,11 @@ def main() -> int:
         classify_and_deduplicate(brief, history)
         validate_sources(brief, response_urls)
         validate_final_recency(brief, parsed_date)
+        assert_brief_quality(
+            brief.model_dump(mode="json"),
+            brief_date=brief_date,
+            verified_source_urls=response_urls,
+        )
         updated_history = update_history(brief, history)
         updated_usage = update_usage_history(
             usage_history,
@@ -1275,6 +1283,7 @@ def main() -> int:
             model,
             ledger,
             succeeded=True,
+            workflow_run_id=workflow_run_id,
         )
         html = render_html(root, brief)
 
@@ -1310,13 +1319,17 @@ def main() -> int:
                 model,
                 ledger,
                 succeeded=False,
+                workflow_run_id=workflow_run_id,
             )
             atomic_write(
                 output_dir / "usage.json",
                 json.dumps(failed_usage, ensure_ascii=False, indent=2) + "\n",
             )
             failed_record = ledger.as_record(
-                brief_date, model, succeeded=False
+                brief_date,
+                model,
+                succeeded=False,
+                workflow_run_id=workflow_run_id,
             )
             LOG.error(
                 "Failed generation usage saved: calls=%d search_calls=%d total_tokens=%d estimated_usd=%.4f",
@@ -1327,7 +1340,12 @@ def main() -> int:
             )
         raise
 
-    usage = ledger.as_record(brief_date, model, succeeded=True)
+    usage = ledger.as_record(
+        brief_date,
+        model,
+        succeeded=True,
+        workflow_run_id=workflow_run_id,
+    )
     LOG.info(
         "DashScope usage: successful_calls=%d search_calls=%d input_tokens=%d output_tokens=%d estimated_usd=%.4f",
         usage["successful_calls"],
