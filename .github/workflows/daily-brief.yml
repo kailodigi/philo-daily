@@ -38,6 +38,9 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --disable-pip-version-check -r requirements.txt
 
+      - name: Run offline unit tests
+        run: python -m unittest discover -s tests -v
+
       - name: Resolve Beijing date
         id: date
         env:
@@ -65,6 +68,8 @@ jobs:
           fi
 
       - name: Generate candidate daily brief
+        id: generate
+        continue-on-error: true
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           DASHSCOPE_MODEL: qwen-plus
@@ -72,6 +77,30 @@ jobs:
           DASHSCOPE_SEARCH_MAX_TOKENS: "2400"
           DASHSCOPE_FINAL_MAX_TOKENS: "6000"
         run: python scripts/generate_daily.py --date "$BRIEF_DATE"
+
+      - name: Record failed generation usage
+        if: steps.generate.outcome == 'failure'
+        run: |
+          if [[ ! -s .build/usage.json ]]; then
+            echo "::error::Generation failed before a usage snapshot was written"
+            exit 1
+          fi
+          cp .build/usage.json data/usage.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/usage.json
+          if git diff --cached --quiet; then
+            echo "No failed-run usage changes to commit."
+          else
+            git commit -m "Record failed Philo Daily Brief usage $BRIEF_DATE"
+            git push origin HEAD:main
+          fi
+
+      - name: Stop after failed generation
+        if: steps.generate.outcome == 'failure'
+        run: |
+          echo "::error::Daily generation failed; previous Pages site remains unchanged"
+          exit 1
 
       - name: Validate candidate daily HTML
         run: >-
