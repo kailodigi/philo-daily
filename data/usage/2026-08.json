@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "month": "2026-08",
+  "pricing_note": "Conservative estimate; actual Alibaba Cloud billing and FX may differ.",
+  "pricing_assumptions": {
+    "qwen_plus_input_cny_per_million_tokens": 0.8,
+    "qwen_plus_output_cny_per_million_tokens": 2.0,
+    "web_search_estimate_cny_per_call": 0.05,
+    "cny_per_usd_estimate": 7.0,
+    "monthly_budget_usd": 5.0
+  },
+  "migration_note": "Legacy daily aggregates could not be split without inventing per-run token counts; known GitHub run IDs are preserved together.",
+  "runs": [
+    {
+      "date": "2026-08-05",
+      "workflow_run_id": "30993481602+30995037103",
+      "model": "qwen-plus",
+      "status": "failure",
+      "api_attempts": 4,
+      "successful_calls": 4,
+      "search_calls": 4,
+      "input_tokens": 23764,
+      "output_tokens": 5501,
+      "total_tokens": 29265,
+      "estimated_model_cost_cny": 0.030013,
+      "estimated_search_cost_cny": 0.2,
+      "estimated_total_cost_cny": 0.230013,
+      "estimated_total_cost_usd": 0.032859,
+      "legacy_aggregate": true
+    },
+    {
+      "date": "2026-08-04",
+      "workflow_run_id": "30902491573",
+      "model": "qwen-plus",
+      "status": "failure",
+      "api_attempts": 5,
+      "successful_calls": 5,
+      "search_calls": 3,
+      "input_tokens": 26809,
+      "output_tokens": 10988,
+      "total_tokens": 37797,
+      "estimated_model_cost_cny": 0.043423,
+      "estimated_search_cost_cny": 0.15,
+      "estimated_total_cost_cny": 0.193423,
+      "estimated_total_cost_usd": 0.027632,
+      "legacy_aggregate": true
+    }
+  ],
+  "updated_at": "2026-08-05T17:53:04+08:00"
+}
