@@ -795,18 +795,38 @@ def resolve_candidate_source(
                     site_name and site_name in source_name
                 ):
                     matches.append(result)
-    if not matches:
-        return False
-
     candidate_text = normalize_text(f"{item.headline} {item.what_happened}")
-    best = max(
-        matches,
-        key=lambda result: SequenceMatcher(
-            None,
-            candidate_text,
-            normalize_text(str(result.get("title", ""))),
-        ).ratio(),
-    )
+    if matches:
+        best = max(
+            matches,
+            key=lambda result: SequenceMatcher(
+                None,
+                candidate_text,
+                normalize_text(str(result.get("title", ""))),
+            ).ratio(),
+        )
+    else:
+        ranked = sorted(
+            (
+                (
+                    SequenceMatcher(
+                        None,
+                        normalize_text(item.headline),
+                        normalize_text(str(result.get("title", ""))),
+                    ).ratio(),
+                    result,
+                )
+                for result in search_results
+                if normalize_text(str(result.get("title", "")))
+            ),
+            key=lambda pair: pair[0],
+            reverse=True,
+        )
+        if not ranked or ranked[0][0] < 0.42:
+            return False
+        if len(ranked) > 1 and ranked[0][0] - ranked[1][0] < 0.05:
+            return False
+        best = ranked[0][1]
     item.source_url = best["url"]
     site_name = str(best.get("site_name", "")).strip()
     if site_name:
@@ -1144,10 +1164,11 @@ def request_brief(
                     source = candidate_by_url.get(normalize_url(news.source_url))
                     if source is None:
                         raise ValueError("正文包含候选池之外的来源链接")
-                    if news.source_name != source.source_name:
-                        raise ValueError("正文来源名未原样继承候选")
-                    if news.published_at != source.published_at:
-                        raise ValueError("正文发布时间未原样继承候选")
+                    news.source_name = source.source_name
+                    news.source_url = source.source_url
+                    news.published_at = source.published_at
+            classify_and_deduplicate(candidate_brief, history)
+            validate_final_recency(candidate_brief, date.fromisoformat(brief_date))
             brief = candidate_brief
             break
         except Exception as exc:
