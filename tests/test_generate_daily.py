@@ -4,6 +4,7 @@ from scripts.generate_daily import (
     CandidateItem,
     UsageLedger,
     empty_usage_history,
+    resolve_candidate_source,
     select_ranked_candidates,
     update_usage_history,
 )
@@ -65,6 +66,33 @@ class CandidateSelectionTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "social"):
             select_ranked_candidates(pools)
+
+    def test_source_index_mismatch_uses_unique_trusted_title(self) -> None:
+        item = candidate("全球金融", "M", 1)
+        item.source_index = 99
+        item.source_name = "Unknown source"
+        item.source_url = "https://untrusted.example/story"
+        results = [
+            {
+                "index": 1,
+                "title": "央行调整利率路径",
+                "site_name": "Reuters",
+                "url": "https://www.reuters.com/markets/rates/story-1",
+            },
+            {
+                "index": 2,
+                "title": "国际原油供应出现变化",
+                "site_name": "Financial Times",
+                "url": "https://www.ft.com/content/story-2",
+            },
+        ]
+
+        self.assertTrue(resolve_candidate_source(item, results))
+        self.assertEqual(
+            item.source_url,
+            "https://www.reuters.com/markets/rates/story-1",
+        )
+        self.assertEqual(item.source_name, "Reuters")
 
 
 class UsageLedgerTests(unittest.TestCase):
