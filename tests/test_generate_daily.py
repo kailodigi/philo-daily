@@ -67,6 +67,18 @@ class CandidateSelectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "social"):
             select_ranked_candidates(pools)
 
+    def test_two_macro_plus_three_corporate_make_five_finance(self) -> None:
+        pools = {
+            "M": [candidate("全球金融", "M", i) for i in range(1, 3)],
+            "F": [candidate("全球金融", "F", i) for i in range(1, 4)],
+            "A": [candidate("AI行业", "A", i) for i in range(1, 6)],
+            "S": [candidate("半导体重点", "S", i) for i in range(1, 3)],
+            "T": [candidate("社媒趋势", "T", i) for i in range(1, 3)],
+        }
+        selected = select_ranked_candidates(pools)
+        finance = [item for item in selected if item.category == "全球金融"]
+        self.assertEqual(len(finance), 5)
+
     def test_source_index_mismatch_uses_unique_trusted_title(self) -> None:
         item = candidate("全球金融", "M", 1)
         item.source_index = 99
