@@ -10,6 +10,23 @@
   },
   "days": [
     {
+      "date": "2026-08-05",
+      "model": "qwen-plus",
+      "generation_count": 1,
+      "successful_generations": 0,
+      "failed_generations": 1,
+      "api_attempts": 2,
+      "successful_calls": 2,
+      "search_calls": 2,
+      "input_tokens": 11884,
+      "output_tokens": 2694,
+      "total_tokens": 14578,
+      "estimated_model_cost_cny": 0.014895,
+      "estimated_search_cost_cny": 0.1,
+      "estimated_total_cost_cny": 0.114895,
+      "estimated_total_cost_usd": 0.016414
+    },
+    {
       "date": "2026-08-04",
       "model": "qwen-plus",
       "generation_count": 1,
@@ -25,5 +42,5 @@
       "estimated_total_cost_usd": 0.027632
     }
   ],
-  "updated_at": "2026-08-04T17:13:42+08:00"
+  "updated_at": "2026-08-05T17:30:34+08:00"
 }
