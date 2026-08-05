@@ -102,6 +102,7 @@
     }
     .section--ai { --section-accent: var(--navy); }
     .section--social { --section-accent: var(--gold); }
+    .section-notice { margin: -7px 0 20px; padding: 11px 13px; border-left: 3px solid var(--section-accent); background: rgba(160, 126, 44, .08); color: var(--muted); font-size: .84rem; font-weight: 750; }
     .section-label { display: inline-flex; align-items: center; gap: 9px; }
     .section-label::before { width: 23px; height: 3px; background: currentColor; content: ""; }
     .lead-grid { display: grid; gap: 14px; }
@@ -239,10 +240,13 @@
         </div>
       </section>
 
-{% macro news_section(section_id, label, title, items, extra_class='') -%}
+{% macro news_section(section_id, label, title, items, extra_class='', notice=None) -%}
       <section class="section {{ extra_class }}" data-section="{{ section_id }}" aria-labelledby="{{ section_id }}-title">
         <p class="section-label">{{ label }}</p>
         <h2 id="{{ section_id }}-title">{{ title }}</h2>
+{% if notice %}
+        <p class="section-notice">{{ notice }}</p>
+{% endif %}
         <ol class="news-list">
 {% for item in items %}
           <li class="news-item" data-news-item data-status="{{ item.status }}">
@@ -263,7 +267,7 @@
 {{ news_section('finance', 'Global finance', '全球金融', brief.global_finance) }}
 {{ news_section('ai', 'Artificial intelligence', 'AI 行业', brief.ai_industry, 'section--ai') }}
 {{ news_section('semiconductors', 'Semiconductors', '半导体重点', brief.semiconductors) }}
-{{ news_section('social', 'Social pulse', '社媒趋势', brief.social_trends, 'section--social') }}
+{{ news_section('social', 'Social pulse', '社媒趋势', brief.social_trends, 'section--social', brief.social_limit_notice) }}
 
       <aside class="insight" data-section="insight" aria-labelledby="insight-title">
         <p class="section-label">Philo synthesis</p>
