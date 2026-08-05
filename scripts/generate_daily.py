@@ -167,7 +167,7 @@ SEARCH_PLANS = (
         "name": "全球金融·宏观市场",
         "prefix": "M",
         "categories": ("全球金融",),
-        "minimum": {"全球金融": 3},
+        "minimum": {"全球金融": 2},
         "limit": 6,
         "focus": "全球宏观、央行、汇率、债券、能源和主要市场价格变化",
         "priority": "Reuters、Bloomberg、FT、央行、监管机构与交易所",
