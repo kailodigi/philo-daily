@@ -25,10 +25,10 @@ UNKNOWN_SOURCES = {
     "不详",
 }
 CATEGORY_FIELDS = (
-    ("金融", "global_finance", 5),
-    ("AI", "ai_industry", 5),
-    ("半导体", "semiconductors", 2),
-    ("社媒", "social_trends", 0),
+    ("金融", "global_finance", 3, 5),
+    ("AI", "ai_industry", 3, 5),
+    ("半导体", "semiconductors", 2, 3),
+    ("社媒", "social_trends", 0, 5),
 )
 
 
@@ -65,7 +65,7 @@ def _field(item: dict[str, Any], primary: str, alias: str) -> Any:
 
 
 def _iter_items(brief: dict[str, Any]) -> Iterable[tuple[str, dict[str, Any]]]:
-    for label, field_name, _minimum in CATEGORY_FIELDS:
+    for label, field_name, _minimum, _maximum in CATEGORY_FIELDS:
         values = brief.get(field_name, [])
         if isinstance(values, list):
             for item in values:
@@ -89,13 +89,15 @@ def validate_brief_payload(
     if brief.get("date") != requested_date:
         errors.append("brief date does not match the requested date")
 
-    for label, field_name, minimum in CATEGORY_FIELDS:
+    for label, field_name, minimum, maximum in CATEGORY_FIELDS:
         values = brief.get(field_name)
         if not isinstance(values, list):
             errors.append(f"{label}: {field_name} must be a list")
             continue
         if len(values) < minimum:
             errors.append(f"{label}: expected at least {minimum} items, found {len(values)}")
+        if len(values) > maximum:
+            errors.append(f"{label}: expected at most {maximum} items, found {len(values)}")
 
     social = brief.get("social_trends", [])
     social_count = len(social) if isinstance(social, list) else 0
