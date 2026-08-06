@@ -1,0 +1,14 @@
+{
+  "run_id": 31086849736,
+  "raw_candidate_count": 27,
+  "source_bound_count": 9,
+  "timely_count": 7,
+  "validated_count": 4,
+  "validated_mock": [
+    {"number": 1, "finance_lens": "市场", "importance_score": 96},
+    {"number": 2, "finance_lens": "宏观", "importance_score": 91},
+    {"number": 3, "finance_lens": "政策", "importance_score": 88},
+    {"number": 4, "finance_lens": "市场", "importance_score": 84}
+  ],
+  "observed_failure": "validated_count=4; need 7; company_industry_count=0"
+}
