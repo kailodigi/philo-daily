@@ -264,8 +264,10 @@
       </section>
 {%- endmacro %}
 
-{{ news_section('finance', 'Global finance', '全球金融', brief.global_finance) }}
-{{ news_section('ai', 'Artificial intelligence', 'AI 行业', brief.ai_industry, 'section--ai') }}
+{% set finance_notice = ('今日公开来源中仅筛选出 ' ~ (brief.global_finance|length) ~ ' 条符合时效、来源与去重要求的高可信金融资讯，未使用旧闻或低可信来源补足数量。') if (brief.global_finance|length) < 5 else none %}
+{% set ai_notice = ('今日公开来源中仅筛选出 ' ~ (brief.ai_industry|length) ~ ' 条符合时效、来源与去重要求的高可信 AI 资讯，未使用旧闻或低可信来源补足数量。') if (brief.ai_industry|length) < 5 else none %}
+{{ news_section('finance', 'Global finance', '全球金融', brief.global_finance, '', finance_notice) }}
+{{ news_section('ai', 'Artificial intelligence', 'AI 行业', brief.ai_industry, 'section--ai', ai_notice) }}
 {{ news_section('semiconductors', 'Semiconductors', '半导体重点', brief.semiconductors) }}
 {{ news_section('social', 'Social pulse', '社媒趋势', brief.social_trends, 'section--social', brief.social_limit_notice) }}
 
