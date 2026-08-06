@@ -1,12 +1,15 @@
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts.generate_daily import (
     CandidateItem,
     SEARCH_PLANS,
     UsageLedger,
+    collect_finance_candidates,
     empty_usage_history,
+    finance_search_preflight_errors,
     resolve_candidate_source,
     select_finance_candidates,
     select_ranked_candidates,
@@ -29,10 +32,13 @@ def candidate(
         "S": ("先进封装产线公布扩产", "设备公司披露订单变化", "存储厂商更新产品路线"),
         "T": ("平台更新内容治理规则", "创作者工具增加透明说明", "平台调整推荐透明度", "社媒发布安全治理报告", "创作者后台增加来源标签"),
     }
+    topic_list = topics[prefix]
+    topic = topic_list[(number - 1) % len(topic_list)]
+    suffix = f"第{number}项" if number > len(topic_list) else ""
     return CandidateItem(
         category=category,
         status_hint="新增",
-        headline=f"{prefix}{topics[prefix][number - 1]}",
+        headline=f"{prefix}{topic}{suffix}",
         what_happened="这是经过真实搜索来源绑定的候选事件事实摘要内容。",
         why_important="这项变化会影响行业判断并需要继续观察后续进展。",
         source_name=f"{prefix} Source",
@@ -175,14 +181,196 @@ class FailedRunRegressionTests(unittest.TestCase):
         self.assertEqual(plan["prefix"], "G")
         self.assertEqual(plan["minimum"], {"全球金融": 5})
         self.assertTrue(plan["finance_structure"])
-        queries = "\n".join(plan["queries"])
-        for required in (
-            "markets stocks bonds oil gold dollar",
-            "earnings guidance investment acquisition partnership",
-            "AI semiconductor chips memory packaging",
-            "PBOC China stocks Hong Kong stocks policy",
+        self.assertEqual(plan["preflight_min_candidates"], 20)
+        self.assertEqual(plan["preflight_min_validated"], 10)
+        queries = [
+            query
+            for batch in plan["query_batches"]
+            for query in batch["queries"]
+        ]
+        self.assertEqual(
+            queries,
+            [
+                "global markets stocks bonds currencies today Reuters",
+                "US stocks close today Reuters",
+                "European stocks today Reuters",
+                "Asia markets today Reuters",
+                "gold oil dollar today Reuters",
+                "company earnings today Reuters",
+                "company guidance today Reuters",
+                "company investment today Reuters",
+                "company acquisition today Reuters",
+                "company partnership today Reuters",
+                "semiconductor company news today Reuters",
+                "AI chip company today Reuters",
+                "NVIDIA AMD TSMC news today",
+                "memory chip market today",
+                "advanced packaging semiconductor today",
+                "China stocks today Reuters",
+                "Hong Kong stocks today Reuters",
+                "PBOC policy today Reuters",
+                "China technology stocks today Reuters",
+                "China semiconductor today Reuters",
+            ],
+        )
+
+    def test_run_31075828732_preflight_fails_old_pool_and_passes_expanded_mock(
+        self,
+    ) -> None:
+        fixture_path = Path(__file__).parent / "fixtures" / "run_31075828732.json"
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["run_id"], 31075828732)
+
+        old = fixture["observed_failure"]
+        old_pool = [
+            candidate(
+                "全球金融",
+                "G",
+                item["number"],
+                finance_lens=item["finance_lens"],
+                score=item["importance_score"],
+            )
+            for item in old["validated_mock"]
+        ]
+        old_errors = finance_search_preflight_errors(
+            candidate_count=old["candidate_count"],
+            validated_candidates=old_pool,
+        )
+        self.assertTrue(any("candidate_count=7" in error for error in old_errors))
+        self.assertTrue(any("validated_count=3" in error for error in old_errors))
+        self.assertTrue(any("company/industry" in error for error in old_errors))
+
+        expanded = fixture["expanded_search_mock"]
+        expanded_pool = [
+            candidate(
+                "全球金融",
+                "G",
+                item["number"],
+                finance_lens=item["finance_lens"],
+                score=item["importance_score"],
+            )
+            for item in expanded["validated_mock"]
+        ]
+        self.assertEqual(
+            finance_search_preflight_errors(
+                candidate_count=expanded["candidate_count"],
+                validated_candidates=expanded_pool,
+            ),
+            [],
+        )
+        self.assertEqual(len(select_finance_candidates(expanded_pool)), 5)
+
+    @patch("scripts.generate_daily.search_result_records", side_effect=lambda value: value)
+    @patch("scripts.generate_daily.call_dashscope_json")
+    def test_expanded_finance_batches_aggregate_before_preflight(
+        self,
+        mock_call,
+        _mock_search_results,
+    ) -> None:
+        finance_plan = next(
+            plan for plan in SEARCH_PLANS if plan.get("finance_structure")
+        )
+        responses = []
+        lenses = ["市场", "宏观", "公司", "行业", "资本事件", "政策"]
+        batch_headlines = [
+            [
+                "美股收盘呈现板块分化",
+                "欧洲股市受利率预期影响",
+                "亚洲市场跟随汇率波动",
+                "全球债券收益率出现调整",
+                "黄金与美元走势重新定价",
+                "原油市场评估供应变化",
+            ],
+            [
+                "大型银行公布季度盈利",
+                "消费企业更新全年指引",
+                "云计算公司宣布资本投资",
+                "工业集团推进跨境收购",
+                "科技企业签署战略合作",
+                "制药公司调整研发预算",
+            ],
+            [
+                "芯片设计企业发布新品",
+                "人工智能芯片需求变化",
+                "晶圆代工厂更新扩产计划",
+                "存储芯片市场价格调整",
+                "先进封装产业增加投资",
+                "半导体设备公司披露订单",
+            ],
+            [
+                "中国股票市场成交改善",
+                "香港股市科技板块回升",
+                "央行公布最新政策操作",
+                "中国科技公司发布业绩",
+                "本土半导体行业推进融资",
+                "监管机构更新资本市场规则",
+            ],
+        ]
+        global_number = 0
+        for batch_number, _query_batch in enumerate(
+            finance_plan["query_batches"], start=1
         ):
-            self.assertIn(required, queries)
+            payload_candidates = []
+            search_results = []
+            for local_number, lens in enumerate(lenses, start=1):
+                global_number += 1
+                headline = batch_headlines[batch_number - 1][local_number - 1]
+                url = (
+                    "https://www.reuters.com/markets/"
+                    f"finance-batch-{batch_number}-item-{local_number}"
+                )
+                payload_candidates.append(
+                    {
+                        "category": "全球金融",
+                        "status_hint": "新增",
+                        "headline": headline,
+                        "what_happened": "这是由本批次真实搜索结果绑定的候选事件事实摘要内容。",
+                        "why_important": "这项变化会影响市场或行业判断并需要跟踪后续发展。",
+                        "source_name": "Reuters",
+                        "source_index": local_number,
+                        "source_url": url,
+                        "published_at": "2026-08-06",
+                        "published_date": "2026-08-06",
+                        "confidence": "高",
+                        "continuation_of": None,
+                        "finance_lens": lens,
+                        "importance_score": 100 - global_number,
+                    }
+                )
+                search_results.append(
+                    {
+                        "index": local_number,
+                        "title": headline,
+                        "site_name": "Reuters",
+                        "url": url,
+                        "published_at": "2026-08-06",
+                    }
+                )
+            responses.append(({"candidates": payload_candidates}, search_results))
+        mock_call.side_effect = responses
+
+        candidates, source_urls = collect_finance_candidates(
+            plan=finance_plan,
+            brief_date="2026-08-06",
+            compact_history="[]",
+            history={"events": []},
+            api_key="offline-placeholder",
+            model="qwen-plus",
+            timeout_seconds=1,
+            search_max_tokens=2400,
+            ledger=UsageLedger(),
+        )
+
+        self.assertEqual(mock_call.call_count, 4)
+        self.assertEqual(len(source_urls), 24)
+        self.assertEqual(len(candidates), 24)
+        self.assertEqual(
+            finance_search_preflight_errors(
+                candidate_count=len(source_urls),
+                validated_candidates=candidates,
+            ),
+            [],
+        )
 
 
 class UsageLedgerTests(unittest.TestCase):
