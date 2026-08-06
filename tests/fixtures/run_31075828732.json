@@ -1,0 +1,33 @@
+{
+  "run_id": 31075828732,
+  "run_head": "14aff640893050eeb9e7d9ccd50ba1e1f978fe36",
+  "observed_failure": {
+    "candidate_count": 7,
+    "trusted_count": 4,
+    "validated_count": 3,
+    "company_industry_count": 1,
+    "failure_reason": "only 4 trusted source URLs; need 5; only 3 timely 全球金融 candidates; need 5; only 1 company/industry finance candidates; need 2",
+    "validated_mock": [
+      {"number": 1, "finance_lens": "市场", "importance_score": 90},
+      {"number": 2, "finance_lens": "宏观", "importance_score": 85},
+      {"number": 3, "finance_lens": "公司", "importance_score": 80}
+    ]
+  },
+  "expanded_search_mock": {
+    "candidate_count": 24,
+    "validated_count": 10,
+    "validated_mock": [
+      {"number": 1, "finance_lens": "市场", "importance_score": 96},
+      {"number": 2, "finance_lens": "宏观", "importance_score": 94},
+      {"number": 3, "finance_lens": "政策", "importance_score": 92},
+      {"number": 4, "finance_lens": "公司", "importance_score": 98},
+      {"number": 5, "finance_lens": "行业", "importance_score": 95},
+      {"number": 6, "finance_lens": "公司", "importance_score": 90},
+      {"number": 7, "finance_lens": "行业", "importance_score": 88},
+      {"number": 8, "finance_lens": "资本事件", "importance_score": 91},
+      {"number": 9, "finance_lens": "市场", "importance_score": 87},
+      {"number": 10, "finance_lens": "资本事件", "importance_score": 86}
+    ]
+  },
+  "fixture_note": "Observed counts and failure reason come from Run #37 logs. Expanded candidates are synthetic, source-bound offline regression data and are not news content."
+}
