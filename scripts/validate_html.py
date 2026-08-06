@@ -31,6 +31,13 @@ REQUIRED_DAILY_SECTIONS = {
 SOCIAL_SHORTFALL_NOTICE = "今日可靠社媒趋势不足"
 
 
+def section_shortfall_notice(count: int, label: str) -> str:
+    return (
+        f"今日公开来源中仅筛选出 {count} 条符合时效、来源与去重要求的"
+        f"高可信{label}资讯，未使用旧闻或低可信来源补足数量。"
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("paths", nargs="+", type=Path)
@@ -87,10 +94,22 @@ def check_daily(soup: BeautifulSoup) -> list[str]:
 
     finance = soup.select('[data-section="finance"] [data-news-item]')
     ai_items = soup.select('[data-section="ai"] [data-news-item]')
-    if len(finance) != 5:
-        errors.append(f"expected 5 finance items, found {len(finance)}")
-    if len(ai_items) != 5:
-        errors.append(f"expected 5 AI items, found {len(ai_items)}")
+    for section_id, items, label in (
+        ("finance", finance, "金融"),
+        ("ai", ai_items, " AI "),
+    ):
+        count = len(items)
+        if not 3 <= count <= 5:
+            errors.append(f"expected 3–5 {section_id} items, found {count}")
+        notice = soup.select_one(f'[data-section="{section_id}"] .section-notice')
+        if 3 <= count < 5:
+            notice_text = notice.get_text(" ", strip=True) if notice else ""
+            if notice_text != section_shortfall_notice(count, label):
+                errors.append(
+                    f"{section_id} shortfall requires the verified-source notice"
+                )
+        elif count == 5 and notice:
+            errors.append(f"unexpected {section_id} shortfall notice with 5 items")
     social_items = soup.select('[data-section="social"] [data-news-item]')
     social_notice = soup.select_one('[data-section="social"] .section-notice')
     if len(social_items) > 5:
