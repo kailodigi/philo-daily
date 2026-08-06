@@ -32,6 +32,8 @@ def candidate(
     *,
     finance_lens: str | None = None,
     score: int | None = None,
+    confidence: str = "高",
+    published: str = "2026-08-05",
 ) -> CandidateItem:
     topics = {
         "G": ("全球股票市场重新定价", "央行更新利率政策路径", "大型企业发布盈利指引", "关键行业披露投资计划", "跨境资本事件出现进展", "监管机构更新市场政策"),
@@ -51,9 +53,9 @@ def candidate(
         source_name=f"{prefix} Source",
         source_index=number,
         source_url=f"https://example.com/{prefix.lower()}/{number}",
-        published_at="2026-08-05",
-        published_date="2026-08-05",
-        confidence="高",
+        published_at=published,
+        published_date=published,
+        confidence=confidence,
         continuation_of=None,
         finance_lens=finance_lens,
         importance_score=score,
@@ -160,6 +162,18 @@ class CandidateSelectionTests(unittest.TestCase):
         social = [item for item in selected if item.category == "社媒趋势"]
         self.assertEqual(len(social), 1)
 
+    def test_zero_social_items_are_publishable(self) -> None:
+        pools = {
+            "G": finance_pool()[:3],
+            "A": [candidate("AI行业", "A", i) for i in range(1, 4)],
+            "S": [candidate("半导体重点", "S", i) for i in range(1, 3)],
+            "T": [],
+        }
+        selected = select_ranked_candidates(pools)
+        self.assertEqual(
+            sum(item.category == "社媒趋势" for item in selected), 0
+        )
+
     def test_finance_top_five_respects_two_plus_two_plus_one(self) -> None:
         selected = select_finance_candidates(finance_pool())
         self.assertEqual([item.importance_score for item in selected], [99, 95, 90, 85, 80])
@@ -172,11 +186,67 @@ class CandidateSelectionTests(unittest.TestCase):
             2,
         )
 
-    def test_finance_structure_fails_closed_without_two_company_items(self) -> None:
-        pool = finance_pool()
-        pool[3].finance_lens = "资本事件"
-        with self.assertRaisesRegex(ValueError, "company/industry"):
-            select_finance_candidates(pool)
+    def test_company_industry_zero_with_four_finance_items_is_publishable(self) -> None:
+        pool = [
+            candidate("全球金融", "G", i, finance_lens=lens, score=100 - i)
+            for i, lens in enumerate(("市场", "宏观", "政策", "市场"), start=1)
+        ]
+        selected = select_finance_candidates(pool)
+        self.assertEqual(len(selected), 4)
+        self.assertEqual(
+            sum(item.finance_lens in {"公司", "行业"} for item in selected), 0
+        )
+
+    def test_finance_three_is_publishable_and_two_fails(self) -> None:
+        self.assertEqual(len(select_finance_candidates(finance_pool()[:3])), 3)
+        with self.assertRaisesRegex(ValueError, "Fewer than 3"):
+            select_finance_candidates(finance_pool()[:2])
+
+    def test_finance_diversity_breaks_equal_quality_ties(self) -> None:
+        pool = [
+            candidate("全球金融", "G", i, finance_lens="市场", score=90)
+            for i in range(1, 6)
+        ] + [
+            candidate("全球金融", "G", 6, finance_lens="公司", score=90)
+        ]
+        selected = select_finance_candidates(pool)
+        self.assertEqual(len(selected), 5)
+        self.assertIn("公司", {item.finance_lens for item in selected})
+
+    def test_finance_diversity_does_not_override_quality(self) -> None:
+        pool = [
+            candidate("全球金融", "G", i, finance_lens="市场", score=95)
+            for i in range(1, 6)
+        ] + [
+            candidate(
+                "全球金融", "G", 6, finance_lens="公司", score=100,
+                confidence="中", published="2026-08-06",
+            )
+        ]
+        selected = select_finance_candidates(pool)
+        self.assertNotIn("公司", {item.finance_lens for item in selected})
+
+    def test_ai_three_or_four_is_publishable_and_two_fails(self) -> None:
+        for ai_count in (3, 4):
+            pools = {
+                "G": finance_pool()[:3],
+                "A": [candidate("AI行业", "A", i) for i in range(1, ai_count + 1)],
+                "S": [candidate("半导体重点", "S", i) for i in range(1, 3)],
+                "T": [],
+            }
+            selected = select_ranked_candidates(pools)
+            self.assertEqual(
+                sum(item.category == "AI行业" for item in selected), ai_count
+            )
+        with self.assertRaisesRegex(ValueError, "Fewer than 3 unique AI"):
+            select_ranked_candidates(
+                {
+                    "G": finance_pool()[:3],
+                    "A": [candidate("AI行业", "A", i) for i in range(1, 3)],
+                    "S": [candidate("半导体重点", "S", i) for i in range(1, 3)],
+                    "T": [],
+                }
+            )
 
     def test_source_index_mismatch_uses_unique_trusted_title(self) -> None:
         item = candidate(
@@ -243,9 +313,10 @@ class FailedRunRegressionTests(unittest.TestCase):
         self.assertEqual(len(finance_plans), 1)
         plan = finance_plans[0]
         self.assertEqual(plan["prefix"], "G")
-        self.assertEqual(plan["minimum"], {"全球金融": 5})
+        self.assertEqual(plan["minimum"], {"全球金融": 3})
         self.assertTrue(plan["finance_structure"])
-        self.assertEqual(plan["preflight_min_validated"], 7)
+        self.assertEqual(plan["preflight_min_validated"], 3)
+        self.assertEqual(plan["target_validated"], 5)
         self.assertEqual(len(plan["search_rounds"]), 3)
         self.assertEqual(
             [item["query_group"] for item in plan["search_rounds"]],
@@ -308,8 +379,8 @@ class FailedRunRegressionTests(unittest.TestCase):
             candidate_count=old["candidate_count"],
             validated_candidates=old_pool,
         )
-        self.assertTrue(any("validated_count=3" in error for error in old_errors))
-        self.assertTrue(any("company/industry" in error for error in old_errors))
+        self.assertEqual(old_errors, [])
+        self.assertEqual(len(select_finance_candidates(old_pool)), 3)
 
         expanded = fixture["expanded_search_mock"]
         expanded_pool = [
@@ -354,12 +425,12 @@ class FailedRunRegressionTests(unittest.TestCase):
                 )
             return candidates, source_urls, mock_call.call_count, "\n".join(captured.output)
 
-    def test_first_round_reaches_seven_and_stops(self) -> None:
+    def test_first_round_reaches_target_five_and_stops(self) -> None:
         first = finance_round_response(
-            1, ["市场", "宏观", "政策", "公司", "行业", "资本事件", "市场"]
+            1, ["市场", "宏观", "政策", "公司", "行业"]
         )
         candidates, _urls, calls, logs = self.collect_rounds([first])
-        self.assertEqual(len(candidates), 7)
+        self.assertEqual(len(candidates), 5)
         self.assertEqual(calls, 1)
         for field in (
             "round_number=1",
@@ -378,44 +449,41 @@ class FailedRunRegressionTests(unittest.TestCase):
     def test_second_round_fills_shortfall_and_stops(self) -> None:
         responses = [
             finance_round_response(1, ["市场", "宏观", "公司", "资本事件"]),
-            finance_round_response(2, ["行业", "公司", "政策", "市场"]),
+            finance_round_response(2, ["行业"]),
         ]
         candidates, _urls, calls, _logs = self.collect_rounds(responses)
-        self.assertEqual(len(candidates), 8)
+        self.assertEqual(len(candidates), 5)
         self.assertEqual(calls, 2)
 
-    def test_company_shortfall_after_round_two_enters_round_three(self) -> None:
+    def test_four_candidates_continue_through_round_three_then_publish(self) -> None:
         responses = [
-            finance_round_response(1, ["市场", "宏观", "政策", "资本事件"]),
-            finance_round_response(2, ["市场", "政策", "资本事件", "公司"]),
-            finance_round_response(3, ["行业", "公司", "资本事件", "市场"]),
+            finance_round_response(1, ["市场", "宏观", "政策"]),
+            finance_round_response(2, []),
+            finance_round_response(3, ["市场"]),
         ]
         candidates, _urls, calls, logs = self.collect_rounds(responses)
-        self.assertGreaterEqual(len(select_finance_candidates(candidates)), 5)
+        self.assertEqual(len(select_finance_candidates(candidates)), 4)
         self.assertEqual(calls, 3)
         self.assertIn("round_number=3", logs)
+        self.assertIn("finance_search_partial", logs)
 
-    def test_three_rounds_can_complete_finance_structure(self) -> None:
+    def test_three_candidates_publish_after_final_round(self) -> None:
         responses = [
-            finance_round_response(1, ["市场", "宏观", "政策", "资本事件"]),
-            finance_round_response(2, ["市场", "政策", "资本事件", "公司"]),
-            finance_round_response(3, ["公司", "行业", "资本事件", "市场"]),
+            finance_round_response(1, ["市场", "宏观", "政策"]),
+            finance_round_response(2, []),
+            finance_round_response(3, []),
         ]
-        candidates, _urls, _calls, _logs = self.collect_rounds(responses)
+        candidates, _urls, calls, logs = self.collect_rounds(responses)
         selected = select_finance_candidates(candidates)
-        self.assertEqual(len(selected), 5)
-        self.assertGreaterEqual(
-            sum(item.finance_lens in {"市场", "宏观", "政策"} for item in selected), 2
-        )
-        self.assertGreaterEqual(
-            sum(item.finance_lens in {"公司", "行业"} for item in selected), 2
-        )
+        self.assertEqual(len(selected), 3)
+        self.assertEqual(calls, 3)
+        self.assertIn("finance_search_partial", logs)
 
-    def test_three_rounds_still_structurally_short_fails(self) -> None:
+    def test_three_rounds_with_only_two_candidates_fail(self) -> None:
         responses = [
-            finance_round_response(1, ["市场", "宏观", "政策", "资本事件"]),
-            finance_round_response(2, ["市场", "宏观", "政策", "资本事件"]),
-            finance_round_response(3, ["市场", "宏观", "政策", "资本事件"]),
+            finance_round_response(1, ["市场", "宏观"]),
+            finance_round_response(2, []),
+            finance_round_response(3, []),
         ]
         finance_plan = next(
             plan for plan in SEARCH_PLANS if plan.get("finance_structure")
@@ -425,7 +493,7 @@ class FailedRunRegressionTests(unittest.TestCase):
             side_effect=lambda value: value,
         ), patch("scripts.generate_daily.call_dashscope_json") as mock_call:
             mock_call.side_effect = responses
-            with self.assertRaisesRegex(ValueError, "company/industry"):
+            with self.assertRaisesRegex(ValueError, "validated_count=2; need 3"):
                 collect_finance_candidates(
                     plan=finance_plan,
                     brief_date="2026-08-06",
@@ -439,22 +507,40 @@ class FailedRunRegressionTests(unittest.TestCase):
                 )
         self.assertEqual(mock_call.call_count, 3)
 
-    def test_seven_validated_candidates_pass_preflight(self) -> None:
-        pool = finance_pool() + [
-            candidate("全球金融", "G", 7, finance_lens="市场", score=60)
-        ]
+    def test_three_validated_candidates_pass_preflight(self) -> None:
+        pool = finance_pool()[:3]
         self.assertEqual(
             finance_search_preflight_errors(
-                candidate_count=7, validated_candidates=pool
+                candidate_count=3, validated_candidates=pool
             ),
             [],
         )
 
-    def test_six_validated_candidates_fail_preflight(self) -> None:
+    def test_two_validated_candidates_fail_preflight(self) -> None:
         errors = finance_search_preflight_errors(
-            candidate_count=6, validated_candidates=finance_pool()
+            candidate_count=2, validated_candidates=finance_pool()[:2]
         )
-        self.assertTrue(any("validated_count=6" in error for error in errors))
+        self.assertTrue(any("validated_count=2" in error for error in errors))
+
+    def test_run_31086849736_four_validated_candidates_are_publishable(self) -> None:
+        fixture_path = Path(__file__).parent / "fixtures" / "run_31086849736.json"
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        pool = [
+            candidate(
+                "全球金融", "G", item["number"],
+                finance_lens=item["finance_lens"],
+                score=item["importance_score"],
+            )
+            for item in fixture["validated_mock"]
+        ]
+        self.assertEqual(
+            finance_search_preflight_errors(
+                candidate_count=fixture["validated_count"],
+                validated_candidates=pool,
+            ),
+            [],
+        )
+        self.assertEqual(len(select_finance_candidates(pool)), 4)
 
     def test_old_unknown_and_unbound_candidates_are_filtered(self) -> None:
         response = finance_round_response(
@@ -478,6 +564,8 @@ class FailedRunRegressionTests(unittest.TestCase):
         candidates, _urls, calls, logs = self.collect_rounds([(payload, results)])
         self.assertEqual(len(candidates), 7)
         self.assertEqual(calls, 1)
+        selected_urls = {item.source_url for item in select_finance_candidates(candidates)}
+        self.assertNotIn("https://untrusted.example/absent", selected_urls)
         self.assertIn("outside_7_day_window=1", logs)
         self.assertIn("unknown_source=1", logs)
         self.assertIn("unbound_source_url=1", logs)
@@ -529,7 +617,7 @@ class FailedRunRegressionTests(unittest.TestCase):
     def test_stop_condition_prevents_extra_query_rounds(self) -> None:
         responses = [
             finance_round_response(
-                1, ["市场", "宏观", "政策", "公司", "行业", "资本事件", "市场"]
+                1, ["市场", "宏观", "政策", "公司", "行业"]
             ),
             AssertionError("round two must not execute"),
         ]
@@ -570,14 +658,27 @@ def quality_item(number: int, *, status: str = "新增", published: str = "2026-
     }
 
 
-def quality_brief() -> dict:
+def quality_brief(
+    *, finance_count: int = 5, ai_count: int = 5, social_count: int = 2
+) -> dict:
+    ai_start = finance_count + 1
+    semiconductor_start = ai_start + ai_count
+    social_start = semiconductor_start + 2
     return {
         "date": "2026-08-05",
-        "global_finance": [quality_item(i) for i in range(1, 6)],
-        "ai_industry": [quality_item(i) for i in range(6, 11)],
-        "semiconductors": [quality_item(i) for i in range(11, 13)],
-        "social_trends": [quality_item(i) for i in range(13, 15)],
-        "social_limit_notice": SOCIAL_SHORTFALL_NOTICE,
+        "global_finance": [quality_item(i) for i in range(1, finance_count + 1)],
+        "ai_industry": [
+            quality_item(i) for i in range(ai_start, ai_start + ai_count)
+        ],
+        "semiconductors": [
+            quality_item(i) for i in range(semiconductor_start, social_start)
+        ],
+        "social_trends": [
+            quality_item(i) for i in range(social_start, social_start + social_count)
+        ],
+        "social_limit_notice": (
+            SOCIAL_SHORTFALL_NOTICE if social_count < 3 else None
+        ),
     }
 
 
@@ -660,6 +761,63 @@ class QualityGateTests(unittest.TestCase):
         brief["social_limit_notice"] = None
         errors = validate_brief_payload(brief, brief_date="2026-08-05")
         self.assertTrue(any(SOCIAL_SHORTFALL_NOTICE in error for error in errors))
+
+    def test_finance_three_or_four_pass_and_two_fails(self) -> None:
+        for count in (3, 4, 5):
+            brief = quality_brief(finance_count=count)
+            self.assertEqual(
+                validate_brief_payload(brief, brief_date="2026-08-05"), []
+            )
+        errors = validate_brief_payload(
+            quality_brief(finance_count=2), brief_date="2026-08-05"
+        )
+        self.assertTrue(any("expected at least 3" in error for error in errors))
+        errors = validate_brief_payload(
+            quality_brief(finance_count=6), brief_date="2026-08-05"
+        )
+        self.assertTrue(any("expected at most 5" in error for error in errors))
+
+    def test_ai_three_or_four_pass_and_two_fails(self) -> None:
+        for count in (3, 4, 5):
+            brief = quality_brief(ai_count=count)
+            self.assertEqual(
+                validate_brief_payload(brief, brief_date="2026-08-05"), []
+            )
+        errors = validate_brief_payload(
+            quality_brief(ai_count=2), brief_date="2026-08-05"
+        )
+        self.assertTrue(any("expected at least 3" in error for error in errors))
+        errors = validate_brief_payload(
+            quality_brief(ai_count=6), brief_date="2026-08-05"
+        )
+        self.assertTrue(any("expected at most 5" in error for error in errors))
+
+    def test_zero_social_items_pass_with_reliability_notice(self) -> None:
+        brief = quality_brief(social_count=0)
+        self.assertEqual(
+            validate_brief_payload(brief, brief_date="2026-08-05"), []
+        )
+
+    def test_shortfall_html_notices_are_rendered_and_validated(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        for finance_count, ai_count in ((4, 3), (3, 4)):
+            with self.subTest(finance=finance_count, ai=ai_count):
+                payload = complete_daily_brief()
+                payload["global_finance"] = payload["global_finance"][:finance_count]
+                payload["ai_industry"] = payload["ai_industry"][:ai_count]
+                payload["social_trends"] = []
+                payload["social_limit_notice"] = SOCIAL_SHORTFALL_NOTICE
+                html = render_html(root, DailyBrief.model_validate(payload))
+                self.assertIn(f"仅筛选出 {finance_count} 条", html)
+                self.assertIn(f"仅筛选出 {ai_count} 条", html)
+                self.assertIn("高可信金融资讯", html)
+                self.assertIn("高可信 AI 资讯", html)
+                with tempfile.TemporaryDirectory() as temporary:
+                    output = Path(temporary) / "2026-08-05.html"
+                    output.write_text(html, encoding="utf-8")
+                    self.assertEqual(
+                        validate_html(output, root, "2026-08-05.html"), []
+                    )
 
     def test_offline_html_generation_and_quality_gate_pass(self) -> None:
         payload = complete_daily_brief()
