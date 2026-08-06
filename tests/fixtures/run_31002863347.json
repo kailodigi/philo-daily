@@ -1,0 +1,21 @@
+{
+  "run_id": 31002863347,
+  "run_head": "0410a70599b5514ad972c8a5434f8a0b2f910cea",
+  "observed_failure": {
+    "macro_attempt_1_timely": 0,
+    "legacy_macro_minimum": 2,
+    "company_attempt_1_timely": 1,
+    "legacy_company_minimum": 3,
+    "api_successful_calls": 4,
+    "final_status": "failure"
+  },
+  "fixture_note": "The observed counts come from run 31002863347 logs. The unified pool below is synthetic, source-bound algorithm data and is not news content.",
+  "unified_source_bound_mock": [
+    {"number": 1, "finance_lens": "市场", "importance_score": 90},
+    {"number": 2, "finance_lens": "宏观", "importance_score": 80},
+    {"number": 3, "finance_lens": "公司", "importance_score": 95},
+    {"number": 4, "finance_lens": "行业", "importance_score": 85},
+    {"number": 5, "finance_lens": "资本事件", "importance_score": 99},
+    {"number": 6, "finance_lens": "政策", "importance_score": 70}
+  ]
+}
