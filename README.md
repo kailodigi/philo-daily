@@ -4,6 +4,14 @@ Philo Daily Brief 是一个由 GitHub Actions 定时生成和发布的中文行�
 
 <https://kailodigi.github.io/philo-daily/>
 
+## 项目状态
+
+- 状态：`paused_search_source_limitation`
+- 暂停基线：代码 HEAD `feab283fa4d32952155c8188dd2091ff9ab246fe`；最近一次生产验收为 Run #40（`31091730378`）。
+- 当前自动生产已暂停：DashScope 搜索在真实运行中无法稳定提供至少 3 条完成来源绑定、时效过滤和去重的高可信金融候选。恢复前需要接入更可靠的新闻搜索或采集来源。
+- 这不代表生成、HTML 或部署链路失败：DashScope API、`qwen-plus` 调用、失败 usage 记录与失败保护已经过真实运行验证；HTML 离线生成和 quality gate 已通过离线回归；历史 GitHub Pages 稳定版本继续保留。
+- Run #40 在金融候选预检阶段停止，未生成或部署不完整页面，也未覆盖历史首页与归档。
+
 ## 自动化流程
 
 - 每天北京时间 07:15（UTC 23:15）运行，也支持在 Actions 页面手动触发。
