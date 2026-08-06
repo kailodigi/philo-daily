@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import time
+from collections import Counter
 from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 from http import HTTPStatus
@@ -159,8 +160,11 @@ CATEGORY_FIELDS = (
 
 FINANCE_MARKET_LENSES = frozenset({"市场", "宏观", "政策"})
 FINANCE_COMPANY_LENSES = frozenset({"公司", "行业"})
-FINANCE_SEARCH_MIN_CANDIDATES = 20
-FINANCE_SEARCH_MIN_VALIDATED = 10
+FINANCE_SEARCH_MIN_VALIDATED = 7
+FINANCE_SEARCH_TARGET_VALIDATED = 12
+UNKNOWN_SOURCE_NAMES = frozenset(
+    {"unknown", "unknownsource", "na", "none", "未知", "未知来源", "不详"}
+)
 
 MODEL_INPUT_CNY_PER_MILLION = 0.8
 MODEL_OUTPUT_CNY_PER_MILLION = 2.0
@@ -203,21 +207,24 @@ SEARCH_PLANS = (
         "categories": ("全球金融",),
         "minimum": {"全球金融": 5},
         "limit": 8,
-        "output_min": 6,
+        "output_min": 5,
         "finance_structure": True,
-        "query_batches": (
+        "search_rounds": (
             {
-                "name": "全球市场",
+                "query_group": "全球市场/宏观/中国政策",
                 "queries": (
                     "global markets stocks bonds currencies today Reuters",
                     "US stocks close today Reuters",
                     "European stocks today Reuters",
                     "Asia markets today Reuters",
                     "gold oil dollar today Reuters",
+                    "oil gold dollar bond yields today Reuters",
+                    "PBOC policy today Reuters",
+                    "China stocks today Reuters",
                 ),
             },
             {
-                "name": "公司",
+                "query_group": "公司/行业/资本事件",
                 "queries": (
                     "company earnings today Reuters",
                     "company guidance today Reuters",
@@ -227,28 +234,22 @@ SEARCH_PLANS = (
                 ),
             },
             {
-                "name": "AI/半导体",
+                "query_group": "AI/半导体/中国科技/港股",
                 "queries": (
                     "semiconductor company news today Reuters",
                     "AI chip company today Reuters",
+                    "AI chip company news today Reuters",
                     "NVIDIA AMD TSMC news today",
                     "memory chip market today",
                     "advanced packaging semiconductor today",
-                ),
-            },
-            {
-                "name": "中国",
-                "queries": (
-                    "China stocks today Reuters",
                     "Hong Kong stocks today Reuters",
-                    "PBOC policy today Reuters",
                     "China technology stocks today Reuters",
                     "China semiconductor today Reuters",
                 ),
             },
         ),
-        "preflight_min_candidates": FINANCE_SEARCH_MIN_CANDIDATES,
         "preflight_min_validated": FINANCE_SEARCH_MIN_VALIDATED,
+        "target_validated": FINANCE_SEARCH_TARGET_VALIDATED,
         "focus": "统一覆盖全球金融的宏观、市场、公司、行业、政策与资本事件，不为任何固定子类预留数量",
         "priority": "Reuters、Bloomberg、FT、央行、监管机构、交易所与公司投资者关系公告",
         "sites": (
@@ -262,6 +263,7 @@ SEARCH_PLANS = (
             "apple.com", "nvidia.com", "investor.fb.com", "abc.xyz",
             "tsmc.com", "asml.com", "amd.com", "intel.com", "micron.com",
             "samsung.com", "skhynix.com", "semi.org",
+            "bankofchina.com",
         ),
     },
     {
@@ -803,6 +805,44 @@ def source_date_from_result(result: dict[str, Any]) -> str | None:
     return None
 
 
+def finance_source_result_allowed(
+    result: dict[str, Any],
+    allowed_sites: tuple[str, ...],
+    brief_day: date,
+) -> tuple[bool, str]:
+    """Apply the finance source allowlist plus page-level Bank of China checks."""
+    url = str(result.get("url", ""))
+    if not source_host_allowed(url, allowed_sites):
+        return False, "untrusted_domain"
+    host = urlsplit(url).netloc.lower().split(":", 1)[0]
+    if not (host == "bankofchina.com" or host.endswith(".bankofchina.com")):
+        return True, ""
+
+    page_text = " ".join(
+        str(result.get(key, ""))
+        for key in ("title", "snippet", "description", "site_name")
+    ).casefold()
+    marketing_markers = (
+        "营销", "优惠", "促销", "活动", "信用卡", "产品推荐", "理财产品",
+        "promotion", "campaign", "special offer", "wealth product",
+    )
+    official_markers = (
+        "公告", "声明", "报告", "市场数据", "外汇牌价", "经济金融",
+        "official", "announcement", "report", "market data", "exchange rate",
+    )
+    if any(marker in page_text for marker in marketing_markers):
+        return False, "bankofchina_marketing_or_product"
+    if not any(marker in page_text for marker in official_markers):
+        return False, "bankofchina_non_official_page"
+    published = source_date_from_result(result)
+    if not published:
+        return False, "bankofchina_missing_published_date"
+    age_days = (brief_day - date.fromisoformat(published)).days
+    if age_days < 0 or age_days > 6:
+        return False, "bankofchina_stale_or_future"
+    return True, ""
+
+
 def resolve_candidate_source(
     item: CandidateItem, search_results: list[dict[str, Any]]
 ) -> bool:
@@ -884,22 +924,56 @@ def finance_search_preflight_errors(
     *,
     candidate_count: int,
     validated_candidates: list[CandidateItem],
-    minimum_candidates: int = FINANCE_SEARCH_MIN_CANDIDATES,
     minimum_validated: int = FINANCE_SEARCH_MIN_VALIDATED,
 ) -> list[str]:
     """Validate the aggregated finance search pool before final Qwen synthesis."""
     validated_count = len(validated_candidates)
     errors: list[str] = []
-    if candidate_count < minimum_candidates:
-        errors.append(
-            f"candidate_count={candidate_count} is below {minimum_candidates}"
-        )
     if validated_count < minimum_validated:
         errors.append(
-            f"validated_count={validated_count} is below {minimum_validated}"
+            "total candidates insufficient: "
+            f"validated_count={validated_count}; need {minimum_validated}"
         )
     errors.extend(finance_structure_errors(validated_candidates))
     return errors
+
+
+def filter_finance_recency_with_reasons(
+    candidates: list[CandidateItem],
+    brief_day: date,
+    history: dict[str, Any],
+) -> tuple[list[CandidateItem], Counter[str]]:
+    kept: list[CandidateItem] = []
+    reasons: Counter[str] = Counter()
+    for item in candidates:
+        published = date.fromisoformat(item.published_date)
+        age_days = (brief_day - published).days
+        matched_id = match_history(
+            item.headline, item.source_url, item.continuation_of, history
+        )
+        if age_days < 0:
+            reasons["future_published_date"] += 1
+            continue
+        if age_days > 6:
+            reasons["outside_7_day_window"] += 1
+            continue
+        if age_days >= 2 and not matched_id:
+            reasons["older_than_48h_without_continuation"] += 1
+            continue
+        if matched_id:
+            item.status_hint = "延续"
+            item.continuation_of = matched_id
+        else:
+            item.status_hint = "新增"
+            item.continuation_of = None
+        kept.append(item)
+    return kept, reasons
+
+
+def format_filtered_reason_summary(reasons: Counter[str]) -> str:
+    if not reasons:
+        return "none"
+    return ",".join(f"{key}={reasons[key]}" for key in sorted(reasons))
 
 
 def collect_finance_candidates(
@@ -914,18 +988,22 @@ def collect_finance_candidates(
     search_max_tokens: int,
     ledger: UsageLedger,
 ) -> tuple[list[CandidateItem], set[str]]:
-    """Run broad finance query batches, then validate one unified candidate pool."""
+    """Run up to three finance search rounds and stop once 7 structured items exist."""
     brief_day = date.fromisoformat(brief_date)
     eligible_drafts: list[CandidateItem] = []
     trusted_results_by_url: dict[str, dict[str, Any]] = {}
-    invalid_categories: list[str] = []
+    cumulative_raw_count = 0
+    cumulative_source_bound_count = 0
+    cumulative_timely_count = 0
+    final_errors: list[str] = []
 
-    for query_batch in plan["query_batches"]:
-        query_lines = "\n".join(f"- {query}" for query in query_batch["queries"])
-        prompt = f"""今天是 {brief_date}（北京时间）。联网搜索并为“{plan['name']}”的“{query_batch['name']}”检索批次建立新闻候选。
+    for round_number, search_round in enumerate(plan["search_rounds"], start=1):
+        query_group = search_round["query_group"]
+        query_lines = "\n".join(f"- {query}" for query in search_round["queries"])
+        prompt = f"""今天是 {brief_date}（北京时间）。联网搜索并为“{plan['name']}”执行第 {round_number} 轮“{query_group}”检索。
 
 检索主题：{plan['focus']}
-检索 query 组合（全部覆盖）：
+本轮 query 组合（逐项覆盖）：
 {query_lines}
 来源优先级：{plan['priority']}
 时效要求：优先过去 24 小时；过去 24–48 小时只在确有重要性时采用；更早内容只能是下列过去 7 天事件的明确后续。
@@ -935,7 +1013,7 @@ def collect_finance_candidates(
 {json.dumps(CandidateBatch.model_json_schema(), ensure_ascii=False, separators=(',', ':'))}
 
 要求：
-- 本批次输出 {plan['output_min']} 到 {plan['limit']} 个按重要性排序的全球金融候选；不同批次只负责扩大检索覆盖，不设置子类别配额。
+- 本轮输出 {plan['output_min']} 到 {plan['limit']} 个按重要性排序的全球金融候选；不同轮次只负责扩大检索覆盖，不设置固定子类别配额。
 - 每条必须填写 finance_lens（市场/宏观/政策/公司/行业/资本事件）与 importance_score（1–100）。
 - source_index 必须是本次搜索角标 [n] 中的整数 n；一个候选只能引用一个最直接的来源。
 - source_url 必须逐字来自同一角标对应的 DashScope 搜索来源；published_at 必须以 YYYY-MM-DD 开头并保留来源显示的时间/时区，published_date 为同一日期。
@@ -958,48 +1036,32 @@ def collect_finance_candidates(
             batch = CandidateBatch.model_validate(payload)
         except Exception as exc:
             raise ValueError(
-                f"{plan['name']} {query_batch['name']} candidate JSON failed schema validation"
+                f"{plan['name']} round={round_number} candidate JSON failed schema validation"
             ) from exc
 
         raw_search_results = search_result_records(response)
-        trusted_results = [
-            result
-            for result in raw_search_results
-            if source_host_allowed(result["url"], plan["sites"])
-        ][: plan["limit"] + 4]
-        LOG.info(
-            "%s batch=%s source filter: returned=%d trusted=%d",
-            plan["name"],
-            query_batch["name"],
-            len(raw_search_results),
-            len(trusted_results),
-        )
-        untrusted_domains = sorted(
-            {
-                urlsplit(result["url"]).netloc.lower()
-                for result in raw_search_results
-                if not source_host_allowed(result["url"], plan["sites"])
-            }
-        )
-        if untrusted_domains:
-            LOG.info(
-                "%s batch=%s filtered source domains: %s",
-                plan["name"],
-                query_batch["name"],
-                ", ".join(untrusted_domains),
+        cumulative_raw_count += len(raw_search_results)
+        round_reasons: Counter[str] = Counter()
+        trusted_results: list[dict[str, Any]] = []
+        for result in raw_search_results:
+            allowed, reason = finance_source_result_allowed(
+                result, plan["sites"], brief_day
             )
+            if allowed:
+                trusted_results.append(result)
+            else:
+                round_reasons[reason] += 1
+        trusted_results = trusted_results[: plan["limit"] + 4]
 
         for result in trusted_results:
             trusted_results_by_url.setdefault(normalize_url(result["url"]), result)
+        bound_candidates: list[CandidateItem] = []
         for item in batch.candidates:
             if item.category not in plan["categories"]:
-                invalid_categories.append(item.category)
+                round_reasons["unexpected_category"] += 1
                 continue
             if not resolve_candidate_source(item, trusted_results):
-                LOG.warning(
-                    "Dropping candidate without a verified search source: %s",
-                    item.headline,
-                )
+                round_reasons["unbound_source_url"] += 1
                 continue
             matched_result = next(
                 (
@@ -1011,38 +1073,109 @@ def collect_finance_candidates(
                 None,
             )
             if matched_result is None:
+                round_reasons["unbound_source_url"] += 1
+                continue
+            if normalize_text(item.source_name) in UNKNOWN_SOURCE_NAMES:
+                round_reasons["unknown_source"] += 1
                 continue
             source_date = source_date_from_result(matched_result)
             if source_date:
                 item.published_date = source_date
                 item.published_at = source_date
-            eligible_drafts.extend(
-                filter_candidate_recency([item], brief_day, history)
-            )
+            bound_candidates.append(item)
 
-    eligible_drafts = deduplicate_ranked_candidates(eligible_drafts)
-    candidate_count = len(trusted_results_by_url)
-    validated_count = len(eligible_drafts)
-    preflight_errors = finance_search_preflight_errors(
-        candidate_count=candidate_count,
-        validated_candidates=eligible_drafts,
-        minimum_candidates=int(plan["preflight_min_candidates"]),
-        minimum_validated=int(plan["preflight_min_validated"]),
-    )
-    if invalid_categories:
-        preflight_errors.append("unexpected candidate categories")
-    failure_reason = "; ".join(preflight_errors) if preflight_errors else "none"
-    LOG.info(
-        "%s preflight: candidate_count=%d validated_count=%d failure_reason=%s",
-        plan["name"],
-        candidate_count,
-        validated_count,
-        failure_reason,
-    )
-    if preflight_errors:
+        cumulative_source_bound_count += len(bound_candidates)
+        timely_candidates, recency_reasons = filter_finance_recency_with_reasons(
+            bound_candidates, brief_day, history
+        )
+        round_reasons.update(recency_reasons)
+        cumulative_timely_count += len(timely_candidates)
+        previous_validated_count = len(eligible_drafts)
+        deduplicated = deduplicate_ranked_candidates(
+            eligible_drafts + timely_candidates
+        )
+        duplicate_count = (
+            previous_validated_count + len(timely_candidates) - len(deduplicated)
+        )
+        if duplicate_count:
+            round_reasons["duplicate"] += duplicate_count
+        deduplicated_count = len(deduplicated) - previous_validated_count
+        eligible_drafts = deduplicated
+
+        market_count = sum(
+            item.finance_lens in FINANCE_MARKET_LENSES
+            for item in eligible_drafts
+        )
+        company_count = sum(
+            item.finance_lens in FINANCE_COMPANY_LENSES
+            for item in eligible_drafts
+        )
+        final_errors = finance_search_preflight_errors(
+            candidate_count=len(trusted_results_by_url),
+            validated_candidates=eligible_drafts,
+            minimum_validated=int(plan["preflight_min_validated"]),
+        )
+        LOG.info(
+            "finance_search_round round_number=%d query_group=%s "
+            "raw_candidate_count=%d source_bound_count=%d timely_count=%d "
+            "deduplicated_count=%d market_macro_policy_count=%d "
+            "company_industry_count=%d cumulative_validated_count=%d "
+            "filtered_reason_summary=%s",
+            round_number,
+            query_group,
+            len(raw_search_results),
+            len(bound_candidates),
+            len(timely_candidates),
+            deduplicated_count,
+            market_count,
+            company_count,
+            len(eligible_drafts),
+            format_filtered_reason_summary(round_reasons),
+        )
+        if not final_errors:
+            LOG.info(
+                "finance_search_stop round_number=%d validated_count=%d "
+                "target_validated=%d reason=minimum_and_structure_satisfied",
+                round_number,
+                len(eligible_drafts),
+                int(plan["target_validated"]),
+            )
+            break
+
+    if final_errors:
+        failure_reasons = list(final_errors)
+        minimum_validated = int(plan["preflight_min_validated"])
+        if cumulative_source_bound_count < minimum_validated:
+            failure_reasons.append(
+                "source binding insufficient: "
+                f"source_bound_count={cumulative_source_bound_count}"
+            )
+        elif cumulative_timely_count < minimum_validated:
+            failure_reasons.append(
+                "time filtering removed too many candidates: "
+                f"timely_count={cumulative_timely_count}"
+            )
+        elif len(eligible_drafts) < minimum_validated:
+            failure_reasons.append(
+                "deduplication left too few candidates: "
+                f"deduplicated_count={len(eligible_drafts)}"
+            )
+        failure_reason = "; ".join(failure_reasons)
+        LOG.error(
+            "finance_search_failed candidate_count=%d validated_count=%d "
+            "raw_candidate_count=%d source_bound_count=%d timely_count=%d "
+            "failure_reason=%s",
+            len(trusted_results_by_url),
+            len(eligible_drafts),
+            cumulative_raw_count,
+            cumulative_source_bound_count,
+            cumulative_timely_count,
+            failure_reason,
+        )
         raise ValueError(
             f"{plan['name']} search preflight failed: "
-            f"candidate_count={candidate_count}; validated_count={validated_count}; "
+            f"candidate_count={len(trusted_results_by_url)}; "
+            f"validated_count={len(eligible_drafts)}; "
             f"failure_reason={failure_reason}"
         )
     return eligible_drafts, set(trusted_results_by_url)
