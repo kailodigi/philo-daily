@@ -159,6 +159,8 @@ CATEGORY_FIELDS = (
 
 FINANCE_MARKET_LENSES = frozenset({"市场", "宏观", "政策"})
 FINANCE_COMPANY_LENSES = frozenset({"公司", "行业"})
+FINANCE_SEARCH_MIN_CANDIDATES = 20
+FINANCE_SEARCH_MIN_VALIDATED = 10
 
 MODEL_INPUT_CNY_PER_MILLION = 0.8
 MODEL_OUTPUT_CNY_PER_MILLION = 2.0
@@ -200,15 +202,53 @@ SEARCH_PLANS = (
         "prefix": "G",
         "categories": ("全球金融",),
         "minimum": {"全球金融": 5},
-        "limit": 12,
-        "output_min": 8,
+        "limit": 8,
+        "output_min": 6,
         "finance_structure": True,
-        "queries": (
-            "全球市场 markets stocks bonds oil gold dollar",
-            "公司 earnings guidance investment acquisition partnership",
-            "产业 AI semiconductor chips memory packaging",
-            "中国 PBOC China stocks Hong Kong stocks policy",
+        "query_batches": (
+            {
+                "name": "全球市场",
+                "queries": (
+                    "global markets stocks bonds currencies today Reuters",
+                    "US stocks close today Reuters",
+                    "European stocks today Reuters",
+                    "Asia markets today Reuters",
+                    "gold oil dollar today Reuters",
+                ),
+            },
+            {
+                "name": "公司",
+                "queries": (
+                    "company earnings today Reuters",
+                    "company guidance today Reuters",
+                    "company investment today Reuters",
+                    "company acquisition today Reuters",
+                    "company partnership today Reuters",
+                ),
+            },
+            {
+                "name": "AI/半导体",
+                "queries": (
+                    "semiconductor company news today Reuters",
+                    "AI chip company today Reuters",
+                    "NVIDIA AMD TSMC news today",
+                    "memory chip market today",
+                    "advanced packaging semiconductor today",
+                ),
+            },
+            {
+                "name": "中国",
+                "queries": (
+                    "China stocks today Reuters",
+                    "Hong Kong stocks today Reuters",
+                    "PBOC policy today Reuters",
+                    "China technology stocks today Reuters",
+                    "China semiconductor today Reuters",
+                ),
+            },
         ),
+        "preflight_min_candidates": FINANCE_SEARCH_MIN_CANDIDATES,
+        "preflight_min_validated": FINANCE_SEARCH_MIN_VALIDATED,
         "focus": "统一覆盖全球金融的宏观、市场、公司、行业、政策与资本事件，不为任何固定子类预留数量",
         "priority": "Reuters、Bloomberg、FT、央行、监管机构、交易所与公司投资者关系公告",
         "sites": (
@@ -840,6 +880,174 @@ def resolve_candidate_source(
     return True
 
 
+def finance_search_preflight_errors(
+    *,
+    candidate_count: int,
+    validated_candidates: list[CandidateItem],
+    minimum_candidates: int = FINANCE_SEARCH_MIN_CANDIDATES,
+    minimum_validated: int = FINANCE_SEARCH_MIN_VALIDATED,
+) -> list[str]:
+    """Validate the aggregated finance search pool before final Qwen synthesis."""
+    validated_count = len(validated_candidates)
+    errors: list[str] = []
+    if candidate_count < minimum_candidates:
+        errors.append(
+            f"candidate_count={candidate_count} is below {minimum_candidates}"
+        )
+    if validated_count < minimum_validated:
+        errors.append(
+            f"validated_count={validated_count} is below {minimum_validated}"
+        )
+    errors.extend(finance_structure_errors(validated_candidates))
+    return errors
+
+
+def collect_finance_candidates(
+    *,
+    plan: dict[str, Any],
+    brief_date: str,
+    compact_history: str,
+    history: dict[str, Any],
+    api_key: str,
+    model: str,
+    timeout_seconds: int,
+    search_max_tokens: int,
+    ledger: UsageLedger,
+) -> tuple[list[CandidateItem], set[str]]:
+    """Run broad finance query batches, then validate one unified candidate pool."""
+    brief_day = date.fromisoformat(brief_date)
+    eligible_drafts: list[CandidateItem] = []
+    trusted_results_by_url: dict[str, dict[str, Any]] = {}
+    invalid_categories: list[str] = []
+
+    for query_batch in plan["query_batches"]:
+        query_lines = "\n".join(f"- {query}" for query in query_batch["queries"])
+        prompt = f"""今天是 {brief_date}（北京时间）。联网搜索并为“{plan['name']}”的“{query_batch['name']}”检索批次建立新闻候选。
+
+检索主题：{plan['focus']}
+检索 query 组合（全部覆盖）：
+{query_lines}
+来源优先级：{plan['priority']}
+时效要求：优先过去 24 小时；过去 24–48 小时只在确有重要性时采用；更早内容只能是下列过去 7 天事件的明确后续。
+过去 7 天事件：{compact_history}
+
+输出 JSON Schema：
+{json.dumps(CandidateBatch.model_json_schema(), ensure_ascii=False, separators=(',', ':'))}
+
+要求：
+- 本批次输出 {plan['output_min']} 到 {plan['limit']} 个按重要性排序的全球金融候选；不同批次只负责扩大检索覆盖，不设置子类别配额。
+- 每条必须填写 finance_lens（市场/宏观/政策/公司/行业/资本事件）与 importance_score（1–100）。
+- source_index 必须是本次搜索角标 [n] 中的整数 n；一个候选只能引用一个最直接的来源。
+- source_url 必须逐字来自同一角标对应的 DashScope 搜索来源；published_at 必须以 YYYY-MM-DD 开头并保留来源显示的时间/时区，published_date 为同一日期。
+- 找不到来源发布日期、无法验证链接或只是旧闻重复的内容不要输出。
+- 只返回 JSON 对象。
+"""
+        payload, response = call_dashscope_json(
+            api_key=api_key,
+            model=model,
+            messages=[
+                {"role": "system", "content": SEARCH_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=search_max_tokens,
+            timeout_seconds=timeout_seconds,
+            ledger=ledger,
+            search_enabled=True,
+        )
+        try:
+            batch = CandidateBatch.model_validate(payload)
+        except Exception as exc:
+            raise ValueError(
+                f"{plan['name']} {query_batch['name']} candidate JSON failed schema validation"
+            ) from exc
+
+        raw_search_results = search_result_records(response)
+        trusted_results = [
+            result
+            for result in raw_search_results
+            if source_host_allowed(result["url"], plan["sites"])
+        ][: plan["limit"] + 4]
+        LOG.info(
+            "%s batch=%s source filter: returned=%d trusted=%d",
+            plan["name"],
+            query_batch["name"],
+            len(raw_search_results),
+            len(trusted_results),
+        )
+        untrusted_domains = sorted(
+            {
+                urlsplit(result["url"]).netloc.lower()
+                for result in raw_search_results
+                if not source_host_allowed(result["url"], plan["sites"])
+            }
+        )
+        if untrusted_domains:
+            LOG.info(
+                "%s batch=%s filtered source domains: %s",
+                plan["name"],
+                query_batch["name"],
+                ", ".join(untrusted_domains),
+            )
+
+        for result in trusted_results:
+            trusted_results_by_url.setdefault(normalize_url(result["url"]), result)
+        for item in batch.candidates:
+            if item.category not in plan["categories"]:
+                invalid_categories.append(item.category)
+                continue
+            if not resolve_candidate_source(item, trusted_results):
+                LOG.warning(
+                    "Dropping candidate without a verified search source: %s",
+                    item.headline,
+                )
+                continue
+            matched_result = next(
+                (
+                    result
+                    for result in trusted_results
+                    if normalize_url(result["url"])
+                    == normalize_url(item.source_url)
+                ),
+                None,
+            )
+            if matched_result is None:
+                continue
+            source_date = source_date_from_result(matched_result)
+            if source_date:
+                item.published_date = source_date
+                item.published_at = source_date
+            eligible_drafts.extend(
+                filter_candidate_recency([item], brief_day, history)
+            )
+
+    eligible_drafts = deduplicate_ranked_candidates(eligible_drafts)
+    candidate_count = len(trusted_results_by_url)
+    validated_count = len(eligible_drafts)
+    preflight_errors = finance_search_preflight_errors(
+        candidate_count=candidate_count,
+        validated_candidates=eligible_drafts,
+        minimum_candidates=int(plan["preflight_min_candidates"]),
+        minimum_validated=int(plan["preflight_min_validated"]),
+    )
+    if invalid_categories:
+        preflight_errors.append("unexpected candidate categories")
+    failure_reason = "; ".join(preflight_errors) if preflight_errors else "none"
+    LOG.info(
+        "%s preflight: candidate_count=%d validated_count=%d failure_reason=%s",
+        plan["name"],
+        candidate_count,
+        validated_count,
+        failure_reason,
+    )
+    if preflight_errors:
+        raise ValueError(
+            f"{plan['name']} search preflight failed: "
+            f"candidate_count={candidate_count}; validated_count={validated_count}; "
+            f"failure_reason={failure_reason}"
+        )
+    return eligible_drafts, set(trusted_results_by_url)
+
+
 def collect_candidates(
     *,
     brief_date: str,
@@ -856,6 +1064,21 @@ def collect_candidates(
     brief_day = date.fromisoformat(brief_date)
 
     for plan in SEARCH_PLANS:
+        if plan.get("finance_structure"):
+            finance_candidates, finance_urls = collect_finance_candidates(
+                plan=plan,
+                brief_date=brief_date,
+                compact_history=compact_history,
+                history=history,
+                api_key=api_key,
+                model=model,
+                timeout_seconds=timeout_seconds,
+                search_max_tokens=search_max_tokens,
+                ledger=ledger,
+            )
+            plan_pools.setdefault(plan["prefix"], []).extend(finance_candidates)
+            all_source_urls.update(finance_urls)
+            continue
         categories = "、".join(plan["categories"])
         minimums = "、".join(
             f"{category}至少{minimum}条"
