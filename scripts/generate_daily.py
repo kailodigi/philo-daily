@@ -69,6 +69,8 @@ class CandidateItem(StrictModel):
     published_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     confidence: Literal["高", "中", "低"]
     continuation_of: str | None
+    finance_lens: Literal["市场", "宏观", "政策", "公司", "行业", "资本事件"] | None = None
+    importance_score: int | None = Field(default=None, ge=1, le=100)
 
     @field_validator("source_url")
     @classmethod
@@ -76,6 +78,16 @@ class CandidateItem(StrictModel):
         if not value.startswith(("https://", "http://")):
             raise ValueError("source_url must be an absolute HTTP(S) URL")
         return value
+
+    @model_validator(mode="after")
+    def require_finance_ranking_fields(self) -> "CandidateItem":
+        if self.category == "全球金融" and (
+            self.finance_lens is None or self.importance_score is None
+        ):
+            raise ValueError(
+                "global finance candidates require finance_lens and importance_score"
+            )
+        return self
 
 
 class CandidateBatch(StrictModel):
@@ -145,6 +157,9 @@ CATEGORY_FIELDS = (
     ("社媒趋势", "social_trends"),
 )
 
+FINANCE_MARKET_LENSES = frozenset({"市场", "宏观", "政策"})
+FINANCE_COMPANY_LENSES = frozenset({"公司", "行业"})
+
 MODEL_INPUT_CNY_PER_MILLION = 0.8
 MODEL_OUTPUT_CNY_PER_MILLION = 2.0
 SEARCH_ESTIMATE_CNY_PER_CALL = 0.05
@@ -181,37 +196,32 @@ SYNTHESIS_SYSTEM_PROMPT = """你是 Philo Daily Brief V3 的中文研究编辑�
 
 SEARCH_PLANS = (
     {
-        "name": "全球金融·宏观市场",
-        "prefix": "M",
+        "name": "统一金融候选池",
+        "prefix": "G",
         "categories": ("全球金融",),
-        "minimum": {"全球金融": 2},
-        "limit": 6,
-        "focus": "全球宏观、央行、汇率、债券、能源和主要市场价格变化",
-        "priority": "Reuters、Bloomberg、FT、央行、监管机构与交易所",
+        "minimum": {"全球金融": 5},
+        "limit": 12,
+        "output_min": 8,
+        "finance_structure": True,
+        "queries": (
+            "全球市场 markets stocks bonds oil gold dollar",
+            "公司 earnings guidance investment acquisition partnership",
+            "产业 AI semiconductor chips memory packaging",
+            "中国 PBOC China stocks Hong Kong stocks policy",
+        ),
+        "focus": "统一覆盖全球金融的宏观、市场、公司、行业、政策与资本事件，不为任何固定子类预留数量",
+        "priority": "Reuters、Bloomberg、FT、央行、监管机构、交易所与公司投资者关系公告",
         "sites": (
             "reuters.com", "bloomberg.com", "ft.com", "federalreserve.gov",
             "ecb.europa.eu", "bankofengland.co.uk", "imf.org", "bis.org",
             "pbc.gov.cn", "gov.cn", "csrc.gov.cn", "sse.com.cn", "szse.cn",
             "hkex.com.hk", "news.cn", "wsj.com", "cnbc.com", "apnews.com",
             "spglobal.com", "nasdaq.com", "caixin.com", "yicai.com",
-            "nbd.com.cn", "sina.com.cn", "eastmoney.com",
-        ),
-    },
-    {
-        "name": "全球金融·公司监管",
-        "prefix": "F",
-        "categories": ("全球金融",),
-        "minimum": {"全球金融": 3},
-        "limit": 6,
-        "focus": "全球重要公司公告、监管披露、并购融资、资本开支和行业影响",
-        "priority": "公司投资者关系公告、SEC、交易所，其次 Reuters、Bloomberg、FT",
-        "sites": (
-            "sec.gov", "sse.com.cn", "szse.cn", "hkex.com.hk", "gov.cn",
-            "csrc.gov.cn", "reuters.com", "bloomberg.com", "ft.com", "wsj.com",
-            "cnbc.com", "apnews.com", "spglobal.com", "nasdaq.com", "news.cn",
-            "caixin.com", "yicai.com", "amazon.com", "microsoft.com",
+            "nbd.com.cn", "sina.com.cn", "eastmoney.com", "sec.gov",
+            "amazon.com", "microsoft.com",
             "apple.com", "nvidia.com", "investor.fb.com", "abc.xyz",
-            "nbd.com.cn", "sina.com.cn",
+            "tsmc.com", "asml.com", "amd.com", "intel.com", "micron.com",
+            "samsung.com", "skhynix.com", "semi.org",
         ),
     },
     {
@@ -851,10 +861,21 @@ def collect_candidates(
             f"{category}至少{minimum}条"
             for category, minimum in plan["minimum"].items()
         )
+        query_lines = "\n".join(
+            f"- {query}" for query in plan.get("queries", ())
+        )
+        query_block = f"检索 query 组合（全部覆盖）：\n{query_lines}\n" if query_lines else ""
+        finance_rules = (
+            "- 全球金融候选必须填写 finance_lens（市场/宏观/政策/公司/行业/资本事件）与 importance_score（1–100）。\n"
+            "- importance_score 只表示事件重要性；按分数降序输出。候选池至少包含 2 条市场/宏观/政策、2 条公司/行业，其余不限。\n"
+            if plan.get("finance_structure")
+            else ""
+        )
+        output_min = int(plan.get("output_min", 6))
         prompt = f"""今天是 {brief_date}（北京时间）。联网搜索并为“{plan['name']}”建立新闻候选池。
 
 检索主题：{plan['focus']}
-来源优先级：{plan['priority']}
+{query_block}来源优先级：{plan['priority']}
 时效要求：优先过去 24 小时；过去 24–48 小时只在确有重要性时采用；更早内容只能是下列过去 7 天事件的明确后续。
 过去 7 天事件：{compact_history}
 
@@ -862,9 +883,9 @@ def collect_candidates(
 {json.dumps(CandidateBatch.model_json_schema(), ensure_ascii=False, separators=(',', ':'))}
 
 要求：
-- 输出 6 到 {plan['limit']} 个按重要性排序的候选，category 只能是：{categories}。
+- 输出 {output_min} 到 {plan['limit']} 个按重要性排序的候选，category 只能是：{categories}。
 - 候选数量必须满足：{minimums}。
-- source_index 必须是本次搜索角标 [n] 中的整数 n；一个候选只能引用一个最直接的来源。
+{finance_rules}- source_index 必须是本次搜索角标 [n] 中的整数 n；一个候选只能引用一个最直接的来源。
 - source_url 必须逐字来自同一角标对应的 DashScope 搜索来源；published_at 必须以 YYYY-MM-DD 开头并保留来源显示的时间/时区，published_date 为同一日期。
 - 找不到来源发布日期、无法验证链接或只是旧闻重复的内容不要输出。
 - 社媒只采用平台公告或可靠媒体；没有量化证据时不得写热度数字。
@@ -981,6 +1002,8 @@ def collect_candidates(
                     quality_errors.append(
                         f"only {eligible_count} timely {category} candidates; need {minimum}"
                     )
+            if plan.get("finance_structure"):
+                quality_errors.extend(finance_structure_errors(eligible_drafts))
             if not quality_errors:
                 break
             quality_error = "; ".join(quality_errors)
@@ -992,7 +1015,7 @@ def collect_candidates(
                 )
         else:
             raise ValueError(f"{plan['name']} search quality failed: {quality_error}")
-        plan_pools[plan["prefix"]] = eligible_drafts
+        plan_pools.setdefault(plan["prefix"], []).extend(eligible_drafts)
         all_source_urls.update(source_urls)
 
     return select_ranked_candidates(plan_pools), all_source_urls
@@ -1017,13 +1040,56 @@ def deduplicate_ranked_candidates(
     return unique
 
 
+def finance_structure_errors(candidates: list[CandidateItem]) -> list[str]:
+    finance = [item for item in candidates if item.category == "全球金融"]
+    market_count = sum(item.finance_lens in FINANCE_MARKET_LENSES for item in finance)
+    company_count = sum(item.finance_lens in FINANCE_COMPANY_LENSES for item in finance)
+    errors: list[str] = []
+    if market_count < 2:
+        errors.append(
+            f"only {market_count} market/macro/policy finance candidates; need 2"
+        )
+    if company_count < 2:
+        errors.append(
+            f"only {company_count} company/industry finance candidates; need 2"
+        )
+    return errors
+
+
+def select_finance_candidates(candidates: list[CandidateItem]) -> list[CandidateItem]:
+    """Select a score-ranked Top 5 while enforcing the 2 + 2 + 1 finance mix."""
+    unique = deduplicate_ranked_candidates(
+        [item for item in candidates if item.category == "全球金融"]
+    )
+    ranked = sorted(
+        enumerate(unique),
+        key=lambda pair: (-(pair[1].importance_score or 0), pair[0]),
+    )
+    ordered = [item for _index, item in ranked]
+    if len(ordered) < 5:
+        raise ValueError("Fewer than 5 unique global finance candidates remain")
+    structure_errors = finance_structure_errors(ordered)
+    if structure_errors:
+        raise ValueError("; ".join(structure_errors))
+
+    market = [item for item in ordered if item.finance_lens in FINANCE_MARKET_LENSES]
+    company = [item for item in ordered if item.finance_lens in FINANCE_COMPANY_LENSES]
+    selected = market[:2] + company[:2]
+    selected_urls = {normalize_url(item.source_url) for item in selected}
+    selected.append(
+        next(item for item in ordered if normalize_url(item.source_url) not in selected_urls)
+    )
+    selected.sort(key=lambda item: item.importance_score or 0, reverse=True)
+    return selected
+
+
 def select_ranked_candidates(
     plan_pools: dict[str, list[CandidateItem]],
 ) -> list[CandidateItem]:
-    """Apply deterministic quotas to Qwen-ranked, source-verified pools."""
-    selected: list[CandidateItem] = []
-    seen_urls: set[str] = set()
-    seen_titles: list[str] = []
+    """Apply deterministic structure to Qwen-ranked, source-verified pools."""
+    selected = select_finance_candidates(plan_pools.get("G", []))
+    seen_urls = {normalize_url(item.source_url) for item in selected}
+    seen_titles = [normalize_text(item.headline) for item in selected]
 
     def add_ranked(pool: list[CandidateItem], target_total: int) -> None:
         for item in pool:
@@ -1041,13 +1107,6 @@ def select_ranked_candidates(
             selected.append(item)
             seen_urls.add(normalized_url)
             seen_titles.append(normalized_title)
-
-    add_ranked(plan_pools.get("M", []), 3)
-    add_ranked(plan_pools.get("F", []), 5)
-    if len(selected) < 5:
-        add_ranked(plan_pools.get("M", []) + plan_pools.get("F", []), 5)
-    if len(selected) != 5:
-        raise ValueError("Fewer than 5 unique global finance candidates remain")
 
     add_ranked(plan_pools.get("A", []), 10)
     if len(selected) != 10:
