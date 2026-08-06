@@ -1,20 +1,30 @@
+import json
 import unittest
+from pathlib import Path
 
 from scripts.generate_daily import (
     CandidateItem,
+    SEARCH_PLANS,
     UsageLedger,
     empty_usage_history,
     resolve_candidate_source,
+    select_finance_candidates,
     select_ranked_candidates,
     update_usage_history,
 )
 from scripts.quality_gate import SOCIAL_SHORTFALL_NOTICE, validate_brief_payload
 
 
-def candidate(category: str, prefix: str, number: int) -> CandidateItem:
+def candidate(
+    category: str,
+    prefix: str,
+    number: int,
+    *,
+    finance_lens: str | None = None,
+    score: int | None = None,
+) -> CandidateItem:
     topics = {
-        "M": ("央行调整利率路径", "原油供应预期变化", "主要汇率波动扩大", "国债收益率重新定价"),
-        "F": ("大型企业发布资本开支", "监管机构更新交易规则", "跨境并购出现新进展"),
+        "G": ("全球股票市场重新定价", "央行更新利率政策路径", "大型企业发布盈利指引", "关键行业披露投资计划", "跨境资本事件出现进展", "监管机构更新市场政策"),
         "A": ("基础模型增强企业服务", "开源社区发布模型工具", "云厂商扩展算力平台", "开发平台升级智能功能", "研究机构公布安全方法"),
         "S": ("先进封装产线公布扩产", "设备公司披露订单变化", "存储厂商更新产品路线"),
         "T": ("平台更新内容治理规则", "创作者工具增加透明说明", "平台调整推荐透明度", "社媒发布安全治理报告", "创作者后台增加来源标签"),
@@ -32,14 +42,26 @@ def candidate(category: str, prefix: str, number: int) -> CandidateItem:
         published_date="2026-08-05",
         confidence="高",
         continuation_of=None,
+        finance_lens=finance_lens,
+        importance_score=score,
     )
+
+
+def finance_pool() -> list[CandidateItem]:
+    return [
+        candidate("全球金融", "G", 1, finance_lens="市场", score=90),
+        candidate("全球金融", "G", 2, finance_lens="宏观", score=80),
+        candidate("全球金融", "G", 3, finance_lens="公司", score=95),
+        candidate("全球金融", "G", 4, finance_lens="行业", score=85),
+        candidate("全球金融", "G", 5, finance_lens="资本事件", score=99),
+        candidate("全球金融", "G", 6, finance_lens="政策", score=70),
+    ]
 
 
 class CandidateSelectionTests(unittest.TestCase):
     def test_deterministic_quotas(self) -> None:
         pools = {
-            "M": [candidate("全球金融", "M", i) for i in range(1, 5)],
-            "F": [candidate("全球金融", "F", i) for i in range(1, 4)],
+            "G": finance_pool(),
             "A": [candidate("AI行业", "A", i) for i in range(1, 6)],
             "S": [candidate("半导体重点", "S", i) for i in range(1, 4)],
             "T": [candidate("社媒趋势", "T", i) for i in range(1, 6)],
@@ -59,8 +81,7 @@ class CandidateSelectionTests(unittest.TestCase):
 
     def test_social_shortfall_is_not_padded(self) -> None:
         pools = {
-            "M": [candidate("全球金融", "M", i) for i in range(1, 4)],
-            "F": [candidate("全球金融", "F", i) for i in range(1, 3)],
+            "G": finance_pool(),
             "A": [candidate("AI行业", "A", i) for i in range(1, 6)],
             "S": [candidate("半导体重点", "S", i) for i in range(1, 3)],
             "T": [candidate("社媒趋势", "T", 1)],
@@ -69,27 +90,35 @@ class CandidateSelectionTests(unittest.TestCase):
         social = [item for item in selected if item.category == "社媒趋势"]
         self.assertEqual(len(social), 1)
 
-    def test_two_macro_plus_three_corporate_make_five_finance(self) -> None:
-        pools = {
-            "M": [candidate("全球金融", "M", i) for i in range(1, 3)],
-            "F": [candidate("全球金融", "F", i) for i in range(1, 4)],
-            "A": [candidate("AI行业", "A", i) for i in range(1, 6)],
-            "S": [candidate("半导体重点", "S", i) for i in range(1, 3)],
-            "T": [candidate("社媒趋势", "T", i) for i in range(1, 3)],
-        }
-        selected = select_ranked_candidates(pools)
-        finance = [item for item in selected if item.category == "全球金融"]
-        self.assertEqual(len(finance), 5)
+    def test_finance_top_five_respects_two_plus_two_plus_one(self) -> None:
+        selected = select_finance_candidates(finance_pool())
+        self.assertEqual([item.importance_score for item in selected], [99, 95, 90, 85, 80])
+        self.assertGreaterEqual(
+            sum(item.finance_lens in {"市场", "宏观", "政策"} for item in selected),
+            2,
+        )
+        self.assertGreaterEqual(
+            sum(item.finance_lens in {"公司", "行业"} for item in selected),
+            2,
+        )
+
+    def test_finance_structure_fails_closed_without_two_company_items(self) -> None:
+        pool = finance_pool()
+        pool[3].finance_lens = "资本事件"
+        with self.assertRaisesRegex(ValueError, "company/industry"):
+            select_finance_candidates(pool)
 
     def test_source_index_mismatch_uses_unique_trusted_title(self) -> None:
-        item = candidate("全球金融", "M", 1)
+        item = candidate(
+            "全球金融", "G", 2, finance_lens="宏观", score=90
+        )
         item.source_index = 99
         item.source_name = "Unknown source"
         item.source_url = "https://untrusted.example/story"
         results = [
             {
                 "index": 1,
-                "title": "央行调整利率路径",
+                "title": "央行更新利率政策路径",
                 "site_name": "Reuters",
                 "url": "https://www.reuters.com/markets/rates/story-1",
             },
@@ -107,6 +136,53 @@ class CandidateSelectionTests(unittest.TestCase):
             "https://www.reuters.com/markets/rates/story-1",
         )
         self.assertEqual(item.source_name, "Reuters")
+
+
+class FailedRunRegressionTests(unittest.TestCase):
+    def test_run_31002863347_old_quota_fails_but_unified_pool_passes(self) -> None:
+        fixture_path = Path(__file__).parent / "fixtures" / "run_31002863347.json"
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        observed = fixture["observed_failure"]
+        self.assertEqual(fixture["run_id"], 31002863347)
+        self.assertLess(
+            observed["macro_attempt_1_timely"], observed["legacy_macro_minimum"]
+        )
+        self.assertLess(
+            observed["company_attempt_1_timely"], observed["legacy_company_minimum"]
+        )
+
+        pool = [
+            candidate(
+                "全球金融",
+                "G",
+                item["number"],
+                finance_lens=item["finance_lens"],
+                score=item["importance_score"],
+            )
+            for item in fixture["unified_source_bound_mock"]
+        ]
+        selected = select_finance_candidates(pool)
+        verified_urls = {item.source_url for item in pool}
+        self.assertEqual(len(selected), 5)
+        self.assertTrue({item.source_url for item in selected}.issubset(verified_urls))
+
+    def test_unified_finance_plan_contains_required_queries(self) -> None:
+        finance_plans = [
+            plan for plan in SEARCH_PLANS if "全球金融" in plan["categories"]
+        ]
+        self.assertEqual(len(finance_plans), 1)
+        plan = finance_plans[0]
+        self.assertEqual(plan["prefix"], "G")
+        self.assertEqual(plan["minimum"], {"全球金融": 5})
+        self.assertTrue(plan["finance_structure"])
+        queries = "\n".join(plan["queries"])
+        for required in (
+            "markets stocks bonds oil gold dollar",
+            "earnings guidance investment acquisition partnership",
+            "AI semiconductor chips memory packaging",
+            "PBOC China stocks Hong Kong stocks policy",
+        ):
+            self.assertIn(required, queries)
 
 
 class UsageLedgerTests(unittest.TestCase):
