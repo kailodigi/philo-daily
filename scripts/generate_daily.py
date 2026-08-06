@@ -92,7 +92,7 @@ class CandidateItem(StrictModel):
 
 
 class CandidateBatch(StrictModel):
-    candidates: list[CandidateItem] = Field(min_length=4, max_length=12)
+    candidates: list[CandidateItem] = Field(default_factory=list, max_length=12)
 
 
 class Signal(StrictModel):
@@ -127,8 +127,8 @@ class DailyBrief(StrictModel):
         min_length=3, max_length=3
     )
     signal_board: list[Signal] = Field(min_length=4, max_length=6)
-    global_finance: list[NewsItem] = Field(min_length=5, max_length=5)
-    ai_industry: list[NewsItem] = Field(min_length=5, max_length=5)
+    global_finance: list[NewsItem] = Field(min_length=3, max_length=5)
+    ai_industry: list[NewsItem] = Field(min_length=3, max_length=5)
     semiconductors: list[NewsItem] = Field(min_length=2, max_length=3)
     social_trends: list[NewsItem] = Field(default_factory=list, max_length=5)
     social_limit_notice: str | None = Field(default=None, max_length=40)
@@ -160,8 +160,8 @@ CATEGORY_FIELDS = (
 
 FINANCE_MARKET_LENSES = frozenset({"市场", "宏观", "政策"})
 FINANCE_COMPANY_LENSES = frozenset({"公司", "行业"})
-FINANCE_SEARCH_MIN_VALIDATED = 7
-FINANCE_SEARCH_TARGET_VALIDATED = 12
+FINANCE_SEARCH_MIN_VALIDATED = 3
+FINANCE_SEARCH_TARGET_VALIDATED = 5
 UNKNOWN_SOURCE_NAMES = frozenset(
     {"unknown", "unknownsource", "na", "none", "未知", "未知来源", "不详"}
 )
@@ -190,7 +190,7 @@ SYNTHESIS_SYSTEM_PROMPT = """你是 Philo Daily Brief V3 的中文研究编辑�
 
 硬性规则：
 1. 不联网，不使用模型记忆补充事实，不新增输入候选之外的来源、数字或事件。
-2. 全球金融与 AI 行业各恰好 5 条；半导体按已验证候选供给输出 2–3 条；社媒趋势只使用可靠候选，最多 5 条。少于 3 条时不得凑数，social_limit_notice 必须逐字填写“今日可靠社媒趋势不足”。
+2. 全球金融与 AI 行业目标各 5 条、最低各 3 条，只能使用已验证候选，候选不足时不得用旧闻或低可信来源补足；半导体按已验证候选供给输出 2–3 条；社媒趋势只使用可靠候选，最多 5 条。社媒少于 3 条时不得凑数，social_limit_notice 必须逐字填写“今日可靠社媒趋势不足”。
 3. 每条资讯保留 status、发生了什么、为什么重要、来源、发布时间、可信度和可点击链接。
 4. 同一事件不得跨栏目重复；标题与正文紧凑，全文适合 5 分钟阅读。
 5. 社媒没有可靠量化数据时，明确说明限制；不得编造小红书、抖音或任何平台热度。
@@ -205,9 +205,9 @@ SEARCH_PLANS = (
         "name": "统一金融候选池",
         "prefix": "G",
         "categories": ("全球金融",),
-        "minimum": {"全球金融": 5},
+        "minimum": {"全球金融": 3},
         "limit": 8,
-        "output_min": 5,
+        "output_min": 3,
         "finance_structure": True,
         "search_rounds": (
             {
@@ -270,8 +270,10 @@ SEARCH_PLANS = (
         "name": "AI行业",
         "prefix": "A",
         "categories": ("AI行业",),
-        "minimum": {"AI行业": 5},
+        "minimum": {"AI行业": 3},
         "limit": 8,
+        "output_min": 3,
+        "target_total": 5,
         "focus": "基础模型、AI产品、企业采用、资本开支、算力基础设施和开源生态",
         "priority": "OpenAI、Anthropic、Google DeepMind、GitHub、HuggingFace 官方，其次 Reuters、Bloomberg、FT 与公司公告",
         "sites": (
@@ -290,6 +292,7 @@ SEARCH_PLANS = (
         "categories": ("半导体重点",),
         "minimum": {"半导体重点": 2},
         "limit": 6,
+        "target_total": 3,
         "focus": "先进制程、先进封装、设备、HBM、AI芯片与关键公司公告",
         "priority": "NVIDIA、TSMC、ASML、SEMI 与公司公告，其次 Reuters、Bloomberg、FT 与专业产业媒体",
         "sites": (
@@ -307,6 +310,8 @@ SEARCH_PLANS = (
         "categories": ("社媒趋势",),
         "minimum": {"社媒趋势": 0},
         "limit": 6,
+        "output_min": 0,
+        "target_total": 5,
         "focus": "社交平台政策、内容分发、创作者生态、AI内容治理与可信社媒行业趋势",
         "priority": "平台官方公告优先，其次 Reuters、Bloomberg、FT 与可靠社媒行业媒体",
         "sites": (
@@ -557,9 +562,11 @@ def classify_and_deduplicate(brief: DailyBrief, history: dict[str, Any]) -> None
 
 
 def validate_sources(brief: DailyBrief, response_urls: set[str]) -> None:
-    if len(response_urls) < 10:
+    required_urls = sum(1 for _category, _item in iter_news(brief))
+    if len(response_urls) < required_urls:
         raise ValueError(
-            f"DashScope search returned only {len(response_urls)} unique URLs; refusing to invent coverage"
+            "Verified search source coverage is insufficient: "
+            f"unique_urls={len(response_urls)}; news_items={required_urls}"
         )
     missing = [
         str(item.source_url)
@@ -934,7 +941,6 @@ def finance_search_preflight_errors(
             "total candidates insufficient: "
             f"validated_count={validated_count}; need {minimum_validated}"
         )
-    errors.extend(finance_structure_errors(validated_candidates))
     return errors
 
 
@@ -988,7 +994,7 @@ def collect_finance_candidates(
     search_max_tokens: int,
     ledger: UsageLedger,
 ) -> tuple[list[CandidateItem], set[str]]:
-    """Run up to three finance search rounds and stop once 7 structured items exist."""
+    """Run up to three finance rounds; publish 3–5 verified candidates."""
     brief_day = date.fromisoformat(brief_date)
     eligible_drafts: list[CandidateItem] = []
     trusted_results_by_url: dict[str, dict[str, Any]] = {}
@@ -1013,7 +1019,7 @@ def collect_finance_candidates(
 {json.dumps(CandidateBatch.model_json_schema(), ensure_ascii=False, separators=(',', ':'))}
 
 要求：
-- 本轮输出 {plan['output_min']} 到 {plan['limit']} 个按重要性排序的全球金融候选；不同轮次只负责扩大检索覆盖，不设置固定子类别配额。
+- 目标输出 5 个、最多 {plan['limit']} 个按重要性排序的全球金融候选；若真实合格来源不足，可输出 {plan['output_min']}–4 个，不得用旧闻、低可信来源或未绑定链接补足。不同轮次只负责扩大检索覆盖，不设置固定子类别配额。
 - 每条必须填写 finance_lens（市场/宏观/政策/公司/行业/资本事件）与 importance_score（1–100）。
 - source_index 必须是本次搜索角标 [n] 中的整数 n；一个候选只能引用一个最直接的来源。
 - source_url 必须逐字来自同一角标对应的 DashScope 搜索来源；published_at 必须以 YYYY-MM-DD 开头并保留来源显示的时间/时区，published_date 为同一日期。
@@ -1132,10 +1138,10 @@ def collect_finance_candidates(
             len(eligible_drafts),
             format_filtered_reason_summary(round_reasons),
         )
-        if not final_errors:
+        if len(eligible_drafts) >= int(plan["target_validated"]):
             LOG.info(
                 "finance_search_stop round_number=%d validated_count=%d "
-                "target_validated=%d reason=minimum_and_structure_satisfied",
+                "target_validated=%d reason=target_reached",
                 round_number,
                 len(eligible_drafts),
                 int(plan["target_validated"]),
@@ -1177,6 +1183,13 @@ def collect_finance_candidates(
             f"candidate_count={len(trusted_results_by_url)}; "
             f"validated_count={len(eligible_drafts)}; "
             f"failure_reason={failure_reason}"
+        )
+    if len(eligible_drafts) < int(plan["target_validated"]):
+        LOG.info(
+            "finance_search_partial validated_count=%d target_validated=%d "
+            "reason=minimum_publishable_satisfied_after_final_round",
+            len(eligible_drafts),
+            int(plan["target_validated"]),
         )
     return eligible_drafts, set(trusted_results_by_url)
 
@@ -1228,6 +1241,7 @@ def collect_candidates(
             else ""
         )
         output_min = int(plan.get("output_min", 6))
+        target_total = int(plan.get("target_total", plan["limit"]))
         prompt = f"""今天是 {brief_date}（北京时间）。联网搜索并为“{plan['name']}”建立新闻候选池。
 
 检索主题：{plan['focus']}
@@ -1239,7 +1253,7 @@ def collect_candidates(
 {json.dumps(CandidateBatch.model_json_schema(), ensure_ascii=False, separators=(',', ':'))}
 
 要求：
-- 输出 {output_min} 到 {plan['limit']} 个按重要性排序的候选，category 只能是：{categories}。
+- 目标输出 {target_total} 个、最多 {plan['limit']} 个按重要性排序的候选；若真实合格来源不足，可少至 {output_min} 个，不得用旧闻、低可信来源或未绑定链接补足。category 只能是：{categories}。
 - 候选数量必须满足：{minimums}。
 {finance_rules}- source_index 必须是本次搜索角标 [n] 中的整数 n；一个候选只能引用一个最直接的来源。
 - source_url 必须逐字来自同一角标对应的 DashScope 搜索来源；published_at 必须以 YYYY-MM-DD 开头并保留来源显示的时间/时区，published_date 为同一日期。
@@ -1358,8 +1372,6 @@ def collect_candidates(
                     quality_errors.append(
                         f"only {eligible_count} timely {category} candidates; need {minimum}"
                     )
-            if plan.get("finance_structure"):
-                quality_errors.extend(finance_structure_errors(eligible_drafts))
             if not quality_errors:
                 break
             quality_error = "; ".join(quality_errors)
@@ -1396,46 +1408,39 @@ def deduplicate_ranked_candidates(
     return unique
 
 
-def finance_structure_errors(candidates: list[CandidateItem]) -> list[str]:
-    finance = [item for item in candidates if item.category == "全球金融"]
-    market_count = sum(item.finance_lens in FINANCE_MARKET_LENSES for item in finance)
-    company_count = sum(item.finance_lens in FINANCE_COMPANY_LENSES for item in finance)
-    errors: list[str] = []
-    if market_count < 2:
-        errors.append(
-            f"only {market_count} market/macro/policy finance candidates; need 2"
-        )
-    if company_count < 2:
-        errors.append(
-            f"only {company_count} company/industry finance candidates; need 2"
-        )
-    return errors
-
-
 def select_finance_candidates(candidates: list[CandidateItem]) -> list[CandidateItem]:
-    """Select a score-ranked Top 5 while enforcing the 2 + 2 + 1 finance mix."""
+    """Select up to five verified items; diversity only breaks quality ties."""
     unique = deduplicate_ranked_candidates(
         [item for item in candidates if item.category == "全球金融"]
     )
-    ranked = sorted(
-        enumerate(unique),
-        key=lambda pair: (-(pair[1].importance_score or 0), pair[0]),
-    )
-    ordered = [item for _index, item in ranked]
-    if len(ordered) < 5:
-        raise ValueError("Fewer than 5 unique global finance candidates remain")
-    structure_errors = finance_structure_errors(ordered)
-    if structure_errors:
-        raise ValueError("; ".join(structure_errors))
+    if len(unique) < FINANCE_SEARCH_MIN_VALIDATED:
+        raise ValueError(
+            "Fewer than 3 unique global finance candidates remain"
+        )
 
-    market = [item for item in ordered if item.finance_lens in FINANCE_MARKET_LENSES]
-    company = [item for item in ordered if item.finance_lens in FINANCE_COMPANY_LENSES]
-    selected = market[:2] + company[:2]
-    selected_urls = {normalize_url(item.source_url) for item in selected}
-    selected.append(
-        next(item for item in ordered if normalize_url(item.source_url) not in selected_urls)
-    )
-    selected.sort(key=lambda item: item.importance_score or 0, reverse=True)
+    confidence_rank = {"高": 2, "中": 1, "低": 0}
+
+    def quality_key(item: CandidateItem) -> tuple[int, str, int]:
+        return (
+            confidence_rank[item.confidence],
+            item.published_date,
+            item.importance_score or 0,
+        )
+
+    remaining = list(enumerate(unique))
+    selected: list[CandidateItem] = []
+    seen_lenses: set[str] = set()
+    while remaining and len(selected) < 5:
+        best_quality = max(quality_key(item) for _index, item in remaining)
+        tied = [pair for pair in remaining if quality_key(pair[1]) == best_quality]
+        chosen = next(
+            (pair for pair in tied if pair[1].finance_lens not in seen_lenses),
+            tied[0],
+        )
+        remaining.remove(chosen)
+        selected.append(chosen[1])
+        if chosen[1].finance_lens:
+            seen_lenses.add(chosen[1].finance_lens)
     return selected
 
 
@@ -1464,9 +1469,10 @@ def select_ranked_candidates(
             seen_urls.add(normalized_url)
             seen_titles.append(normalized_title)
 
-    add_ranked(plan_pools.get("A", []), 10)
-    if len(selected) != 10:
-        raise ValueError("Fewer than 5 unique AI candidates remain")
+    before_ai = len(selected)
+    add_ranked(plan_pools.get("A", []), before_ai + 5)
+    if len(selected) - before_ai < 3:
+        raise ValueError("Fewer than 3 unique AI candidates remain")
 
     before_semiconductors = len(selected)
     add_ranked(plan_pools.get("S", []), before_semiconductors + 3)
@@ -1508,6 +1514,8 @@ def request_brief(
     semiconductor_count = sum(
         item.category == "半导体重点" for item in candidates
     )
+    finance_count = sum(item.category == "全球金融" for item in candidates)
+    ai_count = sum(item.category == "AI行业" for item in candidates)
     social_count = sum(item.category == "社媒趋势" for item in candidates)
     semiconductor_limit_note = (
         "当天仅有 2 条半导体候选满足时效与来源校验，data_limitations 必须明确说明此限制。"
@@ -1526,7 +1534,7 @@ def request_brief(
 输出 JSON Schema：
 {json.dumps(DailyBrief.model_json_schema(), ensure_ascii=False, separators=(',', ':'))}
 
-再次强调：全球金融 5 条、AI 行业 5 条、半导体 {semiconductor_count} 条、社媒 {social_count} 条；社媒候选少于 3 条时不得补写，social_limit_notice 必须逐字填写“{SOCIAL_SHORTFALL_NOTICE}”。source_url、source_name、published_at 必须原样继承候选。{semiconductor_limit_note}只返回 JSON 对象。
+再次强调：全球金融 {finance_count} 条、AI 行业 {ai_count} 条、半导体 {semiconductor_count} 条、社媒 {social_count} 条；金融与 AI 的目标是各 5 条、最低 3 条，候选不足时使用实际条数，不得补写；社媒候选少于 3 条时不得补写，social_limit_notice 必须逐字填写“{SOCIAL_SHORTFALL_NOTICE}”。source_url、source_name、published_at 必须原样继承候选。{semiconductor_limit_note}只返回 JSON 对象。
 """
     candidate_urls = {normalize_url(item.source_url) for item in candidates}
     if not candidate_urls.issubset(search_urls):
@@ -1558,8 +1566,8 @@ def request_brief(
         try:
             candidate_brief = DailyBrief.model_validate(payload)
             expected_counts = {
-                "global_finance": 5,
-                "ai_industry": 5,
+                "global_finance": finance_count,
+                "ai_industry": ai_count,
                 "semiconductors": semiconductor_count,
                 "social_trends": social_count,
             }
