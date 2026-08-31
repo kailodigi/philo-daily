@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "month": "2026-09",
+  "pricing_note": "Conservative estimate; actual Alibaba Cloud billing and FX may differ.",
+  "pricing_assumptions": {
+    "qwen_plus_input_cny_per_million_tokens": 0.8,
+    "qwen_plus_output_cny_per_million_tokens": 2.0,
+    "web_search_estimate_cny_per_call": 0.05,
+    "cny_per_usd_estimate": 7.0,
+    "monthly_budget_usd": 5.0
+  },
+  "runs": [
+    {
+      "date": "2026-09-01",
+      "workflow_run_id": "33450072632",
+      "model": "qwen-plus",
+      "status": "failure",
+      "api_attempts": 2,
+      "successful_calls": 2,
+      "search_calls": 2,
+      "input_tokens": 6289,
+      "output_tokens": 1372,
+      "total_tokens": 7661,
+      "estimated_model_cost_cny": 0.007775,
+      "estimated_search_cost_cny": 0.1,
+      "estimated_total_cost_cny": 0.107775,
+      "estimated_total_cost_usd": 0.015396
+    }
+  ],
+  "updated_at": "2026-09-01T07:18:37+08:00"
+}
