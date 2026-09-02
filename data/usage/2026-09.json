@@ -11,6 +11,22 @@
   },
   "runs": [
     {
+      "date": "2026-09-03",
+      "workflow_run_id": "33694676584",
+      "model": "qwen-plus",
+      "status": "failure",
+      "api_attempts": 3,
+      "successful_calls": 3,
+      "search_calls": 3,
+      "input_tokens": 11278,
+      "output_tokens": 1237,
+      "total_tokens": 12515,
+      "estimated_model_cost_cny": 0.011496,
+      "estimated_search_cost_cny": 0.15,
+      "estimated_total_cost_cny": 0.161496,
+      "estimated_total_cost_usd": 0.023071
+    },
+    {
       "date": "2026-09-02",
       "workflow_run_id": "33570512641",
       "model": "qwen-plus",
@@ -43,5 +59,5 @@
       "estimated_total_cost_usd": 0.015396
     }
   ],
-  "updated_at": "2026-09-02T07:20:40+08:00"
+  "updated_at": "2026-09-03T07:21:58+08:00"
 }
